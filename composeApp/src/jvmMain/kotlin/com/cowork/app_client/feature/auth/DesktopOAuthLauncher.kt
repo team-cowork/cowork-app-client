@@ -1,5 +1,6 @@
 package com.cowork.app_client.feature.auth
 
+import com.cowork.app_client.config.AppConfig
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
@@ -21,7 +22,7 @@ class DesktopOAuthLauncher : OAuthLauncher {
         val state = generateCodeVerifier()
         val codeVerifier = generateCodeVerifier()
         val codeChallenge = generateCodeChallenge(codeVerifier)
-        val result = CompletableDeferred<OAuthAuthorizationCode?>()
+        val result = CompletableDeferred<Result<OAuthAuthorizationCode?>>()
         val server = HttpServer.create(InetSocketAddress(CALLBACK_PORT), 0)
 
         server.createContext("/callback") { exchange ->
@@ -30,6 +31,7 @@ class DesktopOAuthLauncher : OAuthLauncher {
             val code = params["code"]
             val returnedState = params["state"]
             val error = params["error"]
+            val errorDescription = params["error_description"]
 
             val html = if (code != null && returnedState == state && error == null) {
                 SUCCESS_HTML
@@ -42,14 +44,25 @@ class DesktopOAuthLauncher : OAuthLauncher {
             exchange.responseBody.use { it.write(html.toByteArray(Charsets.UTF_8)) }
 
             result.complete(
-                if (code != null && returnedState == state && error == null) {
-                    OAuthAuthorizationCode(
-                        code = code,
-                        state = state,
-                        codeVerifier = codeVerifier,
-                        redirectUri = redirectUri,
+                when {
+                    error != null -> Result.failure(
+                        OAuthLaunchException("DataGSM OAuth 오류: $error ${errorDescription.orEmpty()}".trim())
                     )
-                } else null
+                    code == null -> Result.failure(
+                        OAuthLaunchException("OAuth callback에 authorization code가 없습니다. params=${params.keys}")
+                    )
+                    returnedState != state -> Result.failure(
+                        OAuthLaunchException("OAuth state 검증 실패")
+                    )
+                    else -> Result.success(
+                        OAuthAuthorizationCode(
+                            code = code,
+                            state = state,
+                            codeVerifier = codeVerifier,
+                            redirectUri = redirectUri,
+                        )
+                    )
+                }
             )
         }
         server.executor = null
@@ -57,7 +70,11 @@ class DesktopOAuthLauncher : OAuthLauncher {
 
         val fullSignInUrl = buildString {
             append(signInUrl)
-            append(if ('?' in signInUrl) '&' else '?')
+            append("?")
+            appendQueryParam("client_id", AppConfig.DATAGSM_CLIENT_ID)
+            append("&")
+            appendQueryParam("response_type", "code")
+            append("&")
             appendQueryParam("redirect_uri", redirectUri)
             append("&")
             appendQueryParam("state", state)
@@ -73,9 +90,10 @@ class DesktopOAuthLauncher : OAuthLauncher {
             }
         }
 
-        val tokens = withTimeoutOrNull(TIMEOUT_MS) { result.await() }
+        val authorizationCode = withTimeoutOrNull(TIMEOUT_MS) { result.await() }
         server.stop(0)
-        return tokens
+        return authorizationCode?.getOrThrow()
+            ?: throw OAuthLaunchException("OAuth callback 대기 시간이 초과되었습니다.")
     }
 
     private fun parseParams(rawQuery: String?): Map<String, String> {

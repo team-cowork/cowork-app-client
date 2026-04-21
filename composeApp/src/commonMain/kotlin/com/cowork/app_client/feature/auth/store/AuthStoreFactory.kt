@@ -5,6 +5,7 @@ import com.arkivanov.mvikotlin.core.store.Store
 import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.arkivanov.mvikotlin.extensions.coroutines.CoroutineExecutor
 import com.cowork.app_client.data.repository.AuthRepository
+import com.cowork.app_client.feature.auth.OAuthLaunchException
 import com.cowork.app_client.feature.auth.OAuthLauncher
 import com.cowork.app_client.feature.auth.store.AuthStore.Intent
 import com.cowork.app_client.feature.auth.store.AuthStore.Label
@@ -46,18 +47,21 @@ class AuthStoreFactory(
         private fun login() {
             scope.launch {
                 dispatch(Msg.SetLoading(true))
-                val tokens = runCatching {
+                val result = runCatching {
                     val signInUrl = authRepository.getSignInUrl()
                     val authorizationCode = oAuthLauncher.launch(signInUrl) ?: return@runCatching null
                     authRepository.exchangeAuthorizationCode(authorizationCode)
-                }.getOrNull()
+                }
+                val tokens = result.getOrNull()
 
                 if (tokens != null) {
                     authRepository.saveTokens(tokens)
                     dispatch(Msg.SetLoading(false))
                     publish(Label.Authenticated)
                 } else {
-                    dispatch(Msg.SetError("로그인에 실패했습니다. 다시 시도해주세요."))
+                    val message = result.exceptionOrNull()?.let(::toLoginErrorMessage)
+                        ?: "로그인에 실패했습니다. 다시 시도해주세요."
+                    dispatch(Msg.SetError(message))
                 }
             }
         }
@@ -75,7 +79,12 @@ class AuthStoreFactory(
         data class SetError(val error: String?) : Msg
     }
 
-    private object Reducer : com.arkivanov.mvikotlin.core.store.Reducer<State, Msg> {
+    private fun toLoginErrorMessage(throwable: Throwable): String = when (throwable) {
+        is OAuthLaunchException -> throwable.message ?: "OAuth callback 처리에 실패했습니다."
+        else -> "로그인 토큰 교환에 실패했습니다. 서버 /auth/exchange 구현과 실행 상태를 확인해주세요."
+    }
+
+    private object Reducer : Reducer<State, Msg> {
         override fun State.reduce(msg: Msg): State = when (msg) {
             is Msg.SetLoading -> copy(isLoading = msg.isLoading, error = null)
             is Msg.SetError -> copy(isLoading = false, error = msg.error)

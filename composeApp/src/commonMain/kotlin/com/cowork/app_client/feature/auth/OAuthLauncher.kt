@@ -10,3 +10,5 @@ data class OAuthAuthorizationCode(
     val codeVerifier: String,
     val redirectUri: String,
 )
+
+class OAuthLaunchException(message: String) : RuntimeException(message)
