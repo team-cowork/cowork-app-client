@@ -150,6 +150,10 @@ compose.desktop {
                     """.trimIndent()
                 }
             }
+
+            windows {
+                iconFile.set(project.file("icons/AppIcon.ico"))
+            }
         }
 
         buildTypes.release.proguard {
