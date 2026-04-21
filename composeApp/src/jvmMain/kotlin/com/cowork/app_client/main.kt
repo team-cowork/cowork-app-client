@@ -25,6 +25,10 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowScope
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import coworkappclient.composeapp.generated.resources.Res
+import coworkappclient.composeapp.generated.resources.icon_macos
+import coworkappclient.composeapp.generated.resources.icon_windows
+import org.jetbrains.compose.resources.painterResource
 import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.arkivanov.mvikotlin.main.store.DefaultStoreFactory
@@ -34,6 +38,7 @@ import com.cowork.app_client.data.repository.ChatRepository
 import com.cowork.app_client.data.repository.TeamRepository
 import com.cowork.app_client.di.commonModule
 import com.cowork.app_client.di.jvmModule
+import com.cowork.app_client.feature.auth.DesktopOAuthCallbackRegistry
 import com.cowork.app_client.feature.auth.OAuthLauncher
 import com.cowork.app_client.navigation.DefaultRootComponent
 import org.koin.core.context.startKoin
@@ -41,7 +46,9 @@ import java.awt.Dimension
 import java.awt.Frame
 import javax.swing.JFrame
 
-fun main() {
+fun main(args: Array<String>) {
+    DesktopOAuthCallbackRegistry.acceptLaunchArgs(args)
+
     val isMacOs = System.getProperty("os.name")
         .lowercase()
         .contains("mac")
@@ -63,14 +70,18 @@ fun main() {
 
     application {
         val windowState = rememberWindowState(width = 1280.dp, height = 800.dp)
+        val windowIcon = if (isMacOs) painterResource(Res.drawable.icon_macos)
+                         else painterResource(Res.drawable.icon_windows)
 
         Window(
             onCloseRequest = ::exitApplication,
             title = "cowork",
             state = windowState,
             undecorated = !isMacOs,
+            icon = windowIcon,
         ) {
             LaunchedEffect(Unit) {
+                DesktopOAuthCallbackRegistry.installOpenUriHandler()
                 window.minimumSize = Dimension(1180, 680)
                 if (isMacOs) {
                     (window as? JFrame)?.rootPane?.apply {
