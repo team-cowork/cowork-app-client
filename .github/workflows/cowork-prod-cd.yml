@@ -30,6 +30,8 @@ jobs:
           DATE=$(date -u +"%Y%m%d")
           EXISTING=$(git tag -l "v${DATE}.*" | wc -l | tr -d ' ')
           echo "tag=v${DATE}.${EXISTING}" >> "$GITHUB_OUTPUT"
+          echo "app_version=${DATE:2:2}.${DATE:4:2}.$((10#${DATE:6:2} * 10 + EXISTING))" >> "$GITHUB_OUTPUT"
+          echo "dmg_name=cowork-${DATE}.${EXISTING}.dmg" >> "$GITHUB_OUTPUT"
 
       - name: Generate Release Notes
         run: |
@@ -92,7 +94,7 @@ jobs:
           rm /tmp/certificate.p12
 
       - name: Build Distributable
-        run: ./gradlew :composeApp:createDistributable
+        run: ./gradlew :composeApp:createDistributable -PcoworkAppVersion=${{ steps.version.outputs.app_version }}
 
       - name: Sign App Bundle
         run: |
@@ -114,7 +116,7 @@ jobs:
           hdiutil create -volname "cowork" \
             -srcfolder "$APP" \
             -ov -format UDZO \
-            "$DMG_DIR/cowork-1.0.0.dmg"
+            "$DMG_DIR/${{ steps.version.outputs.dmg_name }}"
 
       - name: Sign DMG
         run: |
@@ -123,7 +125,7 @@ jobs:
           codesign --sign "$IDENTITY" \
             --keychain "$SIGNING_KEYCHAIN" \
             --timestamp \
-            "composeApp/build/compose/binaries/main/dmg/cowork-1.0.0.dmg"
+            "composeApp/build/compose/binaries/main/dmg/${{ steps.version.outputs.dmg_name }}"
 
       - name: Notarize DMG
         env:
@@ -132,14 +134,14 @@ jobs:
           NOTARIZATION_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
         run: |
           xcrun notarytool submit \
-            "composeApp/build/compose/binaries/main/dmg/cowork-1.0.0.dmg" \
+            "composeApp/build/compose/binaries/main/dmg/${{ steps.version.outputs.dmg_name }}" \
             --apple-id "$NOTARIZATION_APPLE_ID" \
             --password "$NOTARIZATION_PWD" \
             --team-id "$NOTARIZATION_TEAM_ID" \
             --wait
 
       - name: Staple Notarization Ticket
-        run: xcrun stapler staple "composeApp/build/compose/binaries/main/dmg/cowork-1.0.0.dmg"
+        run: xcrun stapler staple "composeApp/build/compose/binaries/main/dmg/${{ steps.version.outputs.dmg_name }}"
 
       - name: Create Tag
         run: git tag ${{ steps.version.outputs.tag }}
@@ -154,7 +156,7 @@ jobs:
           name: ${{ steps.version.outputs.tag }}
           body_path: release_notes.md
           draft: true
-          files: composeApp/build/compose/binaries/main/dmg/cowork-1.0.0.dmg
+          files: composeApp/build/compose/binaries/main/dmg/${{ steps.version.outputs.dmg_name }}
 
   Notify-Discord:
     runs-on: ubuntu-latest

@@ -1,6 +1,10 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+val coworkAppVersion = providers.gradleProperty("coworkAppVersion")
+    .orElse("1.0.0")
+    .get()
+
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidApplication)
@@ -93,7 +97,7 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
-        versionName = "1.0"
+        versionName = coworkAppVersion
     }
     packaging {
         resources {
@@ -124,7 +128,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "cowork"
-            packageVersion = "1.0.0"
+            packageVersion = coworkAppVersion
 
             macOS {
                 iconFile.set(project.file("icons/AppIcon.icns"))
