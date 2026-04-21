@@ -74,13 +74,15 @@ jobs:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
         run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
           echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.p12
-          security create-keychain -p "temp_password" build.keychain
-          security unlock-keychain -p "temp_password" build.keychain
-          security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "temp_password" build.keychain
-          security list-keychains -d user -s build.keychain login.keychain-db
-          security default-keychain -s build.keychain
+          security create-keychain -p "temp_password" "$KEYCHAIN_PATH"
+          security unlock-keychain -p "temp_password" "$KEYCHAIN_PATH"
+          security import certificate.p12 -k "$KEYCHAIN_PATH" -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "temp_password" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security default-keychain -s "$KEYCHAIN_PATH"
+          echo "SIGNING_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
           rm -f certificate.p12
 
       - name: Build signed DMG
