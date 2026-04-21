@@ -108,6 +108,53 @@ jobs:
             --timestamp \
             "$APP"
 
+      - name: Notarize App Bundle
+        env:
+          NOTARIZATION_APPLE_ID: ${{ secrets.NOTARIZATION_APPLE_ID }}
+          NOTARIZATION_PWD: ${{ secrets.NOTARIZATION_PWD }}
+          NOTARIZATION_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
+        run: |
+          APP="composeApp/build/compose/binaries/main/app/cowork.app"
+          APP_ZIP="composeApp/build/compose/binaries/main/app/cowork.app.zip"
+
+          ditto -c -k --keepParent "$APP" "$APP_ZIP"
+          xcrun notarytool submit "$APP_ZIP" \
+            --apple-id "$NOTARIZATION_APPLE_ID" \
+            --password "$NOTARIZATION_PWD" \
+            --team-id "$NOTARIZATION_TEAM_ID" \
+            --wait \
+            --output-format json \
+            | tee app-notarization.json
+
+          APP_NOTARIZATION_ID=$(ruby -rjson -e 'puts JSON.parse(File.read("app-notarization.json")).fetch("id")')
+          APP_NOTARIZATION_STATUS=$(ruby -rjson -e 'puts JSON.parse(File.read("app-notarization.json")).fetch("status")')
+          if [ "$APP_NOTARIZATION_STATUS" != "Accepted" ]; then
+            xcrun notarytool log "$APP_NOTARIZATION_ID" \
+              --apple-id "$NOTARIZATION_APPLE_ID" \
+              --password "$NOTARIZATION_PWD" \
+              --team-id "$NOTARIZATION_TEAM_ID"
+            echo "::error::App notarization failed with status: $APP_NOTARIZATION_STATUS"
+            exit 1
+          fi
+
+      - name: Staple App Bundle
+        run: |
+          APP="composeApp/build/compose/binaries/main/app/cowork.app"
+
+          for attempt in {1..10}; do
+            echo "Stapling app notarization ticket, attempt ${attempt}/10"
+            if xcrun stapler staple -v "$APP"; then
+              xcrun stapler validate -v "$APP"
+              exit 0
+            fi
+
+            echo "App notarization ticket is not available yet. Waiting 30 seconds..."
+            sleep 30
+          done
+
+          echo "::error::Failed to staple app notarization ticket after 10 attempts."
+          exit 1
+
       - name: Create DMG
         run: |
           APP="composeApp/build/compose/binaries/main/app/cowork.app"
@@ -138,25 +185,37 @@ jobs:
             --apple-id "$NOTARIZATION_APPLE_ID" \
             --password "$NOTARIZATION_PWD" \
             --team-id "$NOTARIZATION_TEAM_ID" \
-            --wait
+            --wait \
+            --output-format json \
+            | tee dmg-notarization.json
+
+          DMG_NOTARIZATION_ID=$(ruby -rjson -e 'puts JSON.parse(File.read("dmg-notarization.json")).fetch("id")')
+          DMG_NOTARIZATION_STATUS=$(ruby -rjson -e 'puts JSON.parse(File.read("dmg-notarization.json")).fetch("status")')
+          if [ "$DMG_NOTARIZATION_STATUS" != "Accepted" ]; then
+            xcrun notarytool log "$DMG_NOTARIZATION_ID" \
+              --apple-id "$NOTARIZATION_APPLE_ID" \
+              --password "$NOTARIZATION_PWD" \
+              --team-id "$NOTARIZATION_TEAM_ID"
+            echo "::error::DMG notarization failed with status: $DMG_NOTARIZATION_STATUS"
+            exit 1
+          fi
 
       - name: Staple Notarization Ticket
         run: |
           DMG="composeApp/build/compose/binaries/main/dmg/${{ steps.version.outputs.dmg_name }}"
 
           for attempt in {1..10}; do
-            echo "Stapling notarization ticket, attempt ${attempt}/10"
-            if xcrun stapler staple "$DMG"; then
-              xcrun stapler validate "$DMG"
+            echo "Stapling DMG notarization ticket, attempt ${attempt}/10"
+            if xcrun stapler staple -v "$DMG"; then
+              xcrun stapler validate -v "$DMG"
               exit 0
             fi
 
-            echo "Notarization ticket is not available yet. Waiting 30 seconds..."
+            echo "DMG notarization ticket is not available yet. Waiting 30 seconds..."
             sleep 30
           done
 
-          echo "::error::Failed to staple notarization ticket after 10 attempts."
-          exit 1
+          echo "::warning::Failed to staple DMG notarization ticket after 10 attempts. The app bundle inside the DMG is already stapled, and the DMG notarization was accepted."
 
       - name: Create Tag
         run: git tag ${{ steps.version.outputs.tag }}
