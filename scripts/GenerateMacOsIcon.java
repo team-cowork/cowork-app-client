@@ -18,7 +18,9 @@ public final class GenerateMacOsIcon {
     private static final double CONTENT_MIN_Y = 1178.14;
     private static final double CONTENT_WIDTH = 3846.0;
     private static final double CONTENT_HEIGHT = 2838.72;
-    private static final double LOGO_WIDTH = 660.0;
+    private static final double BASE_LOGO_WIDTH = 700.0;
+    private static final double MAC_ICON_SCALE = 0.82;
+    private static final double WINDOWS_ICON_SCALE = 0.88;
 
     private static final IconSize[] ICON_SIZES = {
         new IconSize("icon_16x16.png", 16, "icp4"),
@@ -33,6 +35,8 @@ public final class GenerateMacOsIcon {
         new IconSize("icon_512x512@2x.png", 1024, "ic10"),
     };
 
+    private static final int[] WINDOWS_ICON_SIZES = {16, 24, 32, 48, 64, 128, 256};
+
     public static void main(String[] args) throws Exception {
         File root = new File(".").getCanonicalFile();
         File iconsetDir = new File(root, "composeApp/icons/AppIcon.iconset");
@@ -41,16 +45,19 @@ public final class GenerateMacOsIcon {
             throw new IllegalStateException("Failed to create " + iconsetDir);
         }
 
+        BufferedImage baseIcon = renderBaseIcon(1024);
+
         for (IconSize iconSize : ICON_SIZES) {
-            BufferedImage canvas = renderIcon(iconSize.size);
+            BufferedImage canvas = renderScaledIcon(baseIcon, iconSize.size, MAC_ICON_SCALE);
             ImageIO.write(canvas, "png", new File(iconsetDir, iconSize.fileName));
         }
 
-        ImageIO.write(renderIcon(1024), "png", new File(root, "composeApp/icons/AppIcon_macOS_1024.png"));
+        ImageIO.write(renderScaledIcon(baseIcon, 1024, MAC_ICON_SCALE), "png", new File(root, "composeApp/icons/AppIcon_macOS_1024.png"));
         writeIcns(iconsetDir, new File(root, "composeApp/icons/AppIcon.icns"));
+        writeIco(baseIcon, new File(root, "composeApp/icons/AppIcon.ico"));
     }
 
-    private static BufferedImage renderIcon(int size) {
+    private static BufferedImage renderBaseIcon(int size) {
         BufferedImage canvas = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
         Graphics2D graphics = canvas.createGraphics();
         try {
@@ -66,9 +73,9 @@ public final class GenerateMacOsIcon {
             graphics.setColor(Color.WHITE);
             graphics.fillRect(0, 0, (int) CANVAS_SIZE, (int) CANVAS_SIZE);
 
-            double logoScale = LOGO_WIDTH / CONTENT_WIDTH;
+            double logoScale = BASE_LOGO_WIDTH / CONTENT_WIDTH;
             double logoHeight = CONTENT_HEIGHT * logoScale;
-            double logoX = (CANVAS_SIZE - LOGO_WIDTH) / 2.0;
+            double logoX = (CANVAS_SIZE - BASE_LOGO_WIDTH) / 2.0;
             double logoY = (CANVAS_SIZE - logoHeight) / 2.0;
             double translateX = logoX / logoScale - CONTENT_MIN_X;
             double translateY = logoY / logoScale - CONTENT_MIN_Y;
@@ -79,6 +86,23 @@ public final class GenerateMacOsIcon {
             graphics.setStroke(new BasicStroke(91.5714f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 
             drawLogo(graphics);
+        } finally {
+            graphics.dispose();
+        }
+        return canvas;
+    }
+
+    private static BufferedImage renderScaledIcon(BufferedImage source, int size, double iconScale) {
+        BufferedImage canvas = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = canvas.createGraphics();
+        try {
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            int iconSize = (int) Math.round(size * iconScale);
+            int offset = (size - iconSize) / 2;
+            graphics.drawImage(source, offset, offset, iconSize, iconSize, null);
         } finally {
             graphics.dispose();
         }
@@ -123,6 +147,45 @@ public final class GenerateMacOsIcon {
             output.writeBytes("icns");
             output.writeInt(bodyData.length + 8);
             output.write(bodyData);
+        }
+    }
+
+    private static void writeIco(BufferedImage baseIcon, File outputFile) throws Exception {
+        ByteArrayOutputStream imageBytes = new ByteArrayOutputStream();
+        DataOutputStream images = new DataOutputStream(imageBytes);
+        byte[][] pngEntries = new byte[WINDOWS_ICON_SIZES.length][];
+
+        int offset = 6 + WINDOWS_ICON_SIZES.length * 16;
+        for (int index = 0; index < WINDOWS_ICON_SIZES.length; index++) {
+            BufferedImage icon = renderScaledIcon(baseIcon, WINDOWS_ICON_SIZES[index], WINDOWS_ICON_SCALE);
+            ByteArrayOutputStream png = new ByteArrayOutputStream();
+            ImageIO.write(icon, "png", png);
+            pngEntries[index] = png.toByteArray();
+        }
+
+        try (DataOutputStream output = new DataOutputStream(Files.newOutputStream(outputFile.toPath()))) {
+            output.writeShort(Short.reverseBytes((short) 0));
+            output.writeShort(Short.reverseBytes((short) 1));
+            output.writeShort(Short.reverseBytes((short) WINDOWS_ICON_SIZES.length));
+
+            for (int index = 0; index < WINDOWS_ICON_SIZES.length; index++) {
+                int size = WINDOWS_ICON_SIZES[index];
+                byte[] png = pngEntries[index];
+                output.writeByte(size == 256 ? 0 : size);
+                output.writeByte(size == 256 ? 0 : size);
+                output.writeByte(0);
+                output.writeByte(0);
+                output.writeShort(Short.reverseBytes((short) 1));
+                output.writeShort(Short.reverseBytes((short) 32));
+                output.writeInt(Integer.reverseBytes(png.length));
+                output.writeInt(Integer.reverseBytes(offset));
+                offset += png.length;
+            }
+
+            for (byte[] png : pngEntries) {
+                images.write(png);
+            }
+            output.write(imageBytes.toByteArray());
         }
     }
 
