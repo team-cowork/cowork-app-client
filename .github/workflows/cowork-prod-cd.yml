@@ -141,7 +141,22 @@ jobs:
             --wait
 
       - name: Staple Notarization Ticket
-        run: xcrun stapler staple "composeApp/build/compose/binaries/main/dmg/${{ steps.version.outputs.dmg_name }}"
+        run: |
+          DMG="composeApp/build/compose/binaries/main/dmg/${{ steps.version.outputs.dmg_name }}"
+
+          for attempt in {1..10}; do
+            echo "Stapling notarization ticket, attempt ${attempt}/10"
+            if xcrun stapler staple "$DMG"; then
+              xcrun stapler validate "$DMG"
+              exit 0
+            fi
+
+            echo "Notarization ticket is not available yet. Waiting 30 seconds..."
+            sleep 30
+          done
+
+          echo "::error::Failed to staple notarization ticket after 10 attempts."
+          exit 1
 
       - name: Create Tag
         run: git tag ${{ steps.version.outputs.tag }}
