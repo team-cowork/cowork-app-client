@@ -1,5 +1,6 @@
 package com.cowork.app_client.data.remote
 
+import com.cowork.app_client.config.AppConfig
 import com.cowork.app_client.domain.model.AuthTokens
 import com.cowork.app_client.feature.auth.OAuthAuthorizationCode
 import io.ktor.client.HttpClient
@@ -46,7 +47,7 @@ class AuthApi(
         }
     }
 
-    fun getSignInUrl(): String = "$baseUrl/auth/signin"
+    fun getSignInUrl(): String = AppConfig.DATAGSM_AUTHORIZE_URL
 
     @Serializable
     private data class AuthorizationCodeExchangeRequest(
