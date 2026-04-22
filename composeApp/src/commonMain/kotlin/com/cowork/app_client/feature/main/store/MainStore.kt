@@ -5,6 +5,7 @@ import com.cowork.app_client.domain.model.Channel
 import com.cowork.app_client.domain.model.ChannelType
 import com.cowork.app_client.domain.model.ChatMessage
 import com.cowork.app_client.domain.model.TeamSummary
+import com.cowork.app_client.domain.model.UserStatus
 import com.cowork.app_client.feature.main.store.MainStore.Intent
 import com.cowork.app_client.feature.main.store.MainStore.Label
 import com.cowork.app_client.feature.main.store.MainStore.State
@@ -26,6 +27,10 @@ interface MainStore : Store<Intent, State, Label> {
         data class ChangeCreateChannelNotice(val notice: String) : Intent
         data class ChangeCreateChannelType(val type: ChannelType) : Intent
         data object SubmitCreateChannel : Intent
+        data object OpenAccountMenu : Intent
+        data object CloseAccountMenu : Intent
+        data class SetStatus(val status: UserStatus, val expiresInHours: Double?) : Intent
+        data object SignOut : Intent
     }
 
     data class State(
@@ -48,6 +53,11 @@ interface MainStore : Store<Intent, State, Label> {
         val createChannelType: ChannelType = ChannelType.Text,
         val isCreatingChannel: Boolean = false,
         val error: String? = null,
+        val accountId: Long? = null,
+        val accountEmail: String? = null,
+        val accountStatus: UserStatus = UserStatus.Online,
+        val isAccountMenuOpen: Boolean = false,
+        val isUpdatingStatus: Boolean = false,
     ) {
         val selectedTeam: TeamSummary?
             get() = teams.firstOrNull { it.id == selectedTeamId }
@@ -62,5 +72,7 @@ interface MainStore : Store<Intent, State, Label> {
             get() = selectedTeamId != null && createChannelName.isNotBlank() && !isCreatingChannel
     }
 
-    sealed interface Label
+    sealed interface Label {
+        data object SignedOut : Label
+    }
 }

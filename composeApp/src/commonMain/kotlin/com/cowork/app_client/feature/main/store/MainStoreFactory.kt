@@ -4,42 +4,48 @@ import com.arkivanov.mvikotlin.core.store.SimpleBootstrapper
 import com.arkivanov.mvikotlin.core.store.Store
 import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.arkivanov.mvikotlin.extensions.coroutines.CoroutineExecutor
+import com.cowork.app_client.data.repository.AuthRepository
 import com.cowork.app_client.data.repository.ChannelRepository
 import com.cowork.app_client.data.repository.ChatRepository
+import com.cowork.app_client.data.repository.PreferenceRepository
 import com.cowork.app_client.data.repository.TeamRepository
 import com.cowork.app_client.domain.model.Channel
 import com.cowork.app_client.domain.model.ChannelType
 import com.cowork.app_client.domain.model.ChatMessage
 import com.cowork.app_client.domain.model.TeamSummary
+import com.cowork.app_client.domain.model.UserStatus
 import com.cowork.app_client.feature.main.store.MainStore.Intent
 import com.cowork.app_client.feature.main.store.MainStore.Label
 import com.cowork.app_client.feature.main.store.MainStore.State
+import com.cowork.app_client.util.parseJwtClaims
 import kotlinx.coroutines.launch
 
 class MainStoreFactory(
     private val storeFactory: StoreFactory,
+    private val authRepository: AuthRepository,
     private val teamRepository: TeamRepository,
     private val channelRepository: ChannelRepository,
     private val chatRepository: ChatRepository,
+    private val preferenceRepository: PreferenceRepository,
 ) {
     fun create(): MainStore =
         object : MainStore, Store<Intent, State, Label> by storeFactory.create(
             name = "MainStore",
             initialState = State(),
-            bootstrapper = SimpleBootstrapper(Action.LoadTeams),
+            bootstrapper = SimpleBootstrapper(Action.Init),
             executorFactory = { Executor() },
             reducer = Reducer,
         ) {}
 
     private sealed interface Action {
-        data object LoadTeams : Action
+        data object Init : Action
     }
 
     private inner class Executor : CoroutineExecutor<Intent, Action, State, Msg, Label>() {
 
         override fun executeAction(action: Action) {
             when (action) {
-                Action.LoadTeams -> loadTeams()
+                Action.Init -> init()
             }
         }
 
@@ -59,7 +65,28 @@ class MainStoreFactory(
                 is Intent.ChangeCreateChannelNotice -> dispatch(Msg.SetCreateChannelNotice(intent.notice))
                 is Intent.ChangeCreateChannelType -> dispatch(Msg.SetCreateChannelType(intent.type))
                 Intent.SubmitCreateChannel -> createChannel()
+                Intent.OpenAccountMenu -> dispatch(Msg.SetAccountMenuOpen(true))
+                Intent.CloseAccountMenu -> dispatch(Msg.SetAccountMenuOpen(false))
+                is Intent.SetStatus -> updateStatus(intent.status, intent.expiresInHours)
+                Intent.SignOut -> signOut()
             }
+        }
+
+        private fun init() {
+            scope.launch {
+                val tokens = authRepository.getStoredTokens()
+                if (tokens != null) {
+                    val claims = parseJwtClaims(tokens.accessToken)
+                    dispatch(Msg.SetAccountInfo(claims.accountId, claims.email))
+                    if (claims.accountId != null) {
+                        val status = runCatching {
+                            preferenceRepository.getAccountStatus(claims.accountId)
+                        }.getOrDefault(UserStatus.Online)
+                        dispatch(Msg.SetAccountStatus(status))
+                    }
+                }
+            }
+            loadTeams()
         }
 
         private fun loadTeams() {
@@ -166,6 +193,30 @@ class MainStoreFactory(
                 }
             }
         }
+
+        private fun updateStatus(status: UserStatus, expiresInHours: Double?) {
+            val accountId = state().accountId ?: return
+            if (state().isUpdatingStatus) return
+            scope.launch {
+                dispatch(Msg.SetUpdatingStatus(true))
+                runCatching {
+                    preferenceRepository.updateAccountStatus(accountId, status, expiresInHours)
+                }.onSuccess {
+                    dispatch(Msg.SetAccountStatus(status))
+                    dispatch(Msg.SetAccountMenuOpen(false))
+                }.onFailure {
+                    dispatch(Msg.SetError("상태를 변경하지 못했습니다."))
+                }
+                dispatch(Msg.SetUpdatingStatus(false))
+            }
+        }
+
+        private fun signOut() {
+            scope.launch {
+                authRepository.signOut()
+                publish(Label.SignedOut)
+            }
+        }
     }
 
     private sealed interface Msg {
@@ -189,6 +240,10 @@ class MainStoreFactory(
         data class SetError(val error: String?) : Msg
         data object ResetCreateTeamForm : Msg
         data object ResetCreateChannelForm : Msg
+        data class SetAccountInfo(val accountId: Long?, val email: String?) : Msg
+        data class SetAccountStatus(val status: UserStatus) : Msg
+        data class SetAccountMenuOpen(val isOpen: Boolean) : Msg
+        data class SetUpdatingStatus(val isUpdating: Boolean) : Msg
     }
 
     private object Reducer : com.arkivanov.mvikotlin.core.store.Reducer<State, Msg> {
@@ -238,6 +293,10 @@ class MainStoreFactory(
                 createChannelType = ChannelType.Text,
                 isCreatingChannel = false,
             )
+            is Msg.SetAccountInfo -> copy(accountId = msg.accountId, accountEmail = msg.email)
+            is Msg.SetAccountStatus -> copy(accountStatus = msg.status)
+            is Msg.SetAccountMenuOpen -> copy(isAccountMenuOpen = msg.isOpen)
+            is Msg.SetUpdatingStatus -> copy(isUpdatingStatus = msg.isUpdating)
         }
     }
 }
