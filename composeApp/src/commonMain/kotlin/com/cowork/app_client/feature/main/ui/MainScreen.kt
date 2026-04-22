@@ -363,28 +363,27 @@ private fun ChannelPane(
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            if (state.selectedTeamId != null) {
+                Spacer(modifier = Modifier.height(24.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "채널",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Bold,
-                )
-                TextButton(
-                    onClick = onCreateChannelClick,
-                    enabled = state.selectedTeamId != null,
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text("+")
+                    Text(
+                        text = "채널",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    TextButton(onClick = onCreateChannelClick) {
+                        Text("+")
+                    }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
             when {
                 state.selectedTeamId == null -> EmptyPaneText("왼쪽 아래 + 버튼으로 팀을 생성하세요.")
