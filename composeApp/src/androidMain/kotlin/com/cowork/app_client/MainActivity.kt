@@ -10,6 +10,7 @@ import com.arkivanov.mvikotlin.main.store.DefaultStoreFactory
 import com.cowork.app_client.data.repository.AuthRepository
 import com.cowork.app_client.data.repository.ChannelRepository
 import com.cowork.app_client.data.repository.ChatRepository
+import com.cowork.app_client.data.repository.PreferenceRepository
 import com.cowork.app_client.data.repository.TeamRepository
 import com.cowork.app_client.di.androidModule
 import com.cowork.app_client.di.commonModule
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity() {
             teamRepository = get<TeamRepository>(),
             channelRepository = get<ChannelRepository>(),
             chatRepository = get<ChatRepository>(),
+            preferenceRepository = get<PreferenceRepository>(),
             oAuthLauncher = get<OAuthLauncher>(),
         )
 

@@ -10,6 +10,7 @@ import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.cowork.app_client.data.repository.AuthRepository
 import com.cowork.app_client.data.repository.ChannelRepository
 import com.cowork.app_client.data.repository.ChatRepository
+import com.cowork.app_client.data.repository.PreferenceRepository
 import com.cowork.app_client.data.repository.TeamRepository
 import com.cowork.app_client.feature.auth.OAuthLauncher
 import com.cowork.app_client.feature.auth.component.DefaultAuthComponent
@@ -24,6 +25,7 @@ class DefaultRootComponent(
     private val teamRepository: TeamRepository,
     private val channelRepository: ChannelRepository,
     private val chatRepository: ChatRepository,
+    private val preferenceRepository: PreferenceRepository,
     private val oAuthLauncher: OAuthLauncher,
 ) : RootComponent, ComponentContext by componentContext {
 
@@ -54,9 +56,12 @@ class DefaultRootComponent(
                 DefaultMainComponent(
                     componentContext = context,
                     storeFactory = storeFactory,
+                    authRepository = authRepository,
                     teamRepository = teamRepository,
                     channelRepository = channelRepository,
                     chatRepository = chatRepository,
+                    preferenceRepository = preferenceRepository,
+                    onSignedOut = { navigation.replaceAll(Config.Auth) },
                 )
             )
         }

@@ -35,6 +35,7 @@ import com.arkivanov.mvikotlin.main.store.DefaultStoreFactory
 import com.cowork.app_client.data.repository.AuthRepository
 import com.cowork.app_client.data.repository.ChannelRepository
 import com.cowork.app_client.data.repository.ChatRepository
+import com.cowork.app_client.data.repository.PreferenceRepository
 import com.cowork.app_client.data.repository.TeamRepository
 import com.cowork.app_client.di.commonModule
 import com.cowork.app_client.di.jvmModule
@@ -68,6 +69,7 @@ fun main(args: Array<String>) {
             teamRepository = koin.get<TeamRepository>(),
             channelRepository = koin.get<ChannelRepository>(),
             chatRepository = koin.get<ChatRepository>(),
+            preferenceRepository = koin.get<PreferenceRepository>(),
             oAuthLauncher = koin.get<OAuthLauncher>(),
         )
     }
