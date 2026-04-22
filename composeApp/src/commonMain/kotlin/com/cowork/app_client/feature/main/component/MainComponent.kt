@@ -1,7 +1,8 @@
 package com.cowork.app_client.feature.main.component
 
-import com.cowork.app_client.feature.main.store.MainStore
 import com.cowork.app_client.domain.model.ChannelType
+import com.cowork.app_client.domain.model.UserStatus
+import com.cowork.app_client.feature.main.store.MainStore
 import kotlinx.coroutines.flow.StateFlow
 
 interface MainComponent {
@@ -21,4 +22,8 @@ interface MainComponent {
     fun onCreateChannelNoticeChange(notice: String)
     fun onCreateChannelTypeChange(type: ChannelType)
     fun onCreateChannelSubmit()
+    fun onAccountMenuClick()
+    fun onAccountMenuDismiss()
+    fun onStatusChange(status: UserStatus, expiresInHours: Int?)
+    fun onSignOutClick()
 }
