@@ -168,6 +168,7 @@ jobs:
           NOTARIZATION_PWD: ${{ secrets.NOTARIZATION_PWD }}
           NOTARIZATION_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
         run: |
+          echo "APP_NOTARIZATION_ACCEPTED=false" >> "$GITHUB_ENV"
           APP="composeApp/build/compose/binaries/main/app/cowork.app"
           APP_ZIP="composeApp/build/compose/binaries/main/app/cowork.app.zip"
 
@@ -182,8 +183,8 @@ jobs:
 
           APP_NOTARIZATION_ID=$(ruby -rjson -e 'puts JSON.parse(File.read("app-notarization.json")).fetch("id")')
 
-          for attempt in {1..90}; do
-            echo "Checking app notarization status, attempt ${attempt}/90"
+          for attempt in {1..15}; do
+            echo "Checking app notarization status, attempt ${attempt}/15"
             if xcrun notarytool info "$APP_NOTARIZATION_ID" \
               --apple-id "$NOTARIZATION_APPLE_ID" \
               --password "$NOTARIZATION_PWD" \
@@ -194,6 +195,7 @@ jobs:
               echo "App notarization status: $APP_NOTARIZATION_STATUS"
 
               if [ "$APP_NOTARIZATION_STATUS" = "Accepted" ]; then
+                echo "APP_NOTARIZATION_ACCEPTED=true" >> "$GITHUB_ENV"
                 exit 0
               fi
 
@@ -212,10 +214,10 @@ jobs:
             sleep 20
           done
 
-          echo "::error::Timed out waiting for app notarization result."
-          exit 1
+          echo "::warning::App bundle notarization is still in progress. Continuing with DMG notarization as the required release artifact."
 
       - name: Staple App Bundle
+        if: env.APP_NOTARIZATION_ACCEPTED == 'true'
         run: |
           APP="composeApp/build/compose/binaries/main/app/cowork.app"
 
