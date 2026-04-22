@@ -12,6 +12,7 @@ import com.cowork.app_client.data.repository.ChannelRepository
 import com.cowork.app_client.data.repository.ChatRepository
 import com.cowork.app_client.data.repository.PreferenceRepository
 import com.cowork.app_client.data.repository.TeamRepository
+import com.cowork.app_client.data.repository.UserRepository
 import com.cowork.app_client.feature.auth.OAuthLauncher
 import com.cowork.app_client.feature.auth.component.DefaultAuthComponent
 import com.cowork.app_client.feature.main.component.DefaultMainComponent
@@ -26,6 +27,7 @@ class DefaultRootComponent(
     private val channelRepository: ChannelRepository,
     private val chatRepository: ChatRepository,
     private val preferenceRepository: PreferenceRepository,
+    private val userRepository: UserRepository,
     private val oAuthLauncher: OAuthLauncher,
 ) : RootComponent, ComponentContext by componentContext {
 
@@ -61,6 +63,7 @@ class DefaultRootComponent(
                     channelRepository = channelRepository,
                     chatRepository = chatRepository,
                     preferenceRepository = preferenceRepository,
+                    userRepository = userRepository,
                     onSignedOut = { navigation.replaceAll(Config.Auth) },
                 )
             )

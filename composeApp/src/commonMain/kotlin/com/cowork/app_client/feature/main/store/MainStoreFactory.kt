@@ -9,6 +9,7 @@ import com.cowork.app_client.data.repository.ChannelRepository
 import com.cowork.app_client.data.repository.ChatRepository
 import com.cowork.app_client.data.repository.PreferenceRepository
 import com.cowork.app_client.data.repository.TeamRepository
+import com.cowork.app_client.data.repository.UserRepository
 import com.cowork.app_client.domain.model.Channel
 import com.cowork.app_client.domain.model.ChannelType
 import com.cowork.app_client.domain.model.ChatMessage
@@ -27,6 +28,7 @@ class MainStoreFactory(
     private val channelRepository: ChannelRepository,
     private val chatRepository: ChatRepository,
     private val preferenceRepository: PreferenceRepository,
+    private val userRepository: UserRepository,
 ) {
     fun create(): MainStore =
         object : MainStore, Store<Intent, State, Label> by storeFactory.create(
@@ -84,6 +86,12 @@ class MainStoreFactory(
                         }.getOrDefault(UserStatus.Online)
                         dispatch(Msg.SetAccountStatus(status))
                     }
+                }
+            }
+            scope.launch {
+                val profile = runCatching { userRepository.getMyProfile() }.getOrNull()
+                if (profile != null) {
+                    dispatch(Msg.SetUserProfile(profile))
                 }
             }
             loadTeams()
@@ -241,6 +249,7 @@ class MainStoreFactory(
         data object ResetCreateTeamForm : Msg
         data object ResetCreateChannelForm : Msg
         data class SetAccountInfo(val accountId: Long?, val email: String?) : Msg
+        data class SetUserProfile(val profile: com.cowork.app_client.domain.model.UserProfile) : Msg
         data class SetAccountStatus(val status: UserStatus) : Msg
         data class SetAccountMenuOpen(val isOpen: Boolean) : Msg
         data class SetUpdatingStatus(val isUpdating: Boolean) : Msg
@@ -294,6 +303,18 @@ class MainStoreFactory(
                 isCreatingChannel = false,
             )
             is Msg.SetAccountInfo -> copy(accountId = msg.accountId, accountEmail = msg.email)
+            is Msg.SetUserProfile -> copy(
+                accountName = msg.profile.name,
+                accountEmail = msg.profile.email.ifBlank { accountEmail },
+                accountNickname = msg.profile.nickname,
+                accountProfileImageUrl = msg.profile.profileImageUrl,
+                accountGithub = msg.profile.github,
+                accountStudentNumber = msg.profile.studentNumber,
+                accountMajor = msg.profile.major,
+                accountStudentRole = msg.profile.studentRole,
+                accountDescription = msg.profile.description,
+                accountRoles = msg.profile.roles,
+            )
             is Msg.SetAccountStatus -> copy(accountStatus = msg.status)
             is Msg.SetAccountMenuOpen -> copy(isAccountMenuOpen = msg.isOpen)
             is Msg.SetUpdatingStatus -> copy(isUpdatingStatus = msg.isUpdating)

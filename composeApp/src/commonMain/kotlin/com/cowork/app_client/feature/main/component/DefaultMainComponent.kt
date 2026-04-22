@@ -11,6 +11,7 @@ import com.cowork.app_client.data.repository.ChannelRepository
 import com.cowork.app_client.data.repository.ChatRepository
 import com.cowork.app_client.data.repository.PreferenceRepository
 import com.cowork.app_client.data.repository.TeamRepository
+import com.cowork.app_client.data.repository.UserRepository
 import com.cowork.app_client.domain.model.ChannelType
 import com.cowork.app_client.domain.model.UserStatus
 import com.cowork.app_client.feature.main.store.MainStore
@@ -31,6 +32,7 @@ class DefaultMainComponent(
     channelRepository: ChannelRepository,
     chatRepository: ChatRepository,
     preferenceRepository: PreferenceRepository,
+    userRepository: UserRepository,
     private val onSignedOut: () -> Unit,
 ) : MainComponent, ComponentContext by componentContext {
 
@@ -44,6 +46,7 @@ class DefaultMainComponent(
             channelRepository = channelRepository,
             chatRepository = chatRepository,
             preferenceRepository = preferenceRepository,
+            userRepository = userRepository,
         ).create()
     }
 

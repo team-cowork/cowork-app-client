@@ -12,6 +12,7 @@ import com.cowork.app_client.data.repository.ChannelRepository
 import com.cowork.app_client.data.repository.ChatRepository
 import com.cowork.app_client.data.repository.PreferenceRepository
 import com.cowork.app_client.data.repository.TeamRepository
+import com.cowork.app_client.data.repository.UserRepository
 import com.cowork.app_client.di.androidModule
 import com.cowork.app_client.di.commonModule
 import com.cowork.app_client.feature.auth.OAuthLauncher
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
             channelRepository = get<ChannelRepository>(),
             chatRepository = get<ChatRepository>(),
             preferenceRepository = get<PreferenceRepository>(),
+            userRepository = get<UserRepository>(),
             oAuthLauncher = get<OAuthLauncher>(),
         )
 

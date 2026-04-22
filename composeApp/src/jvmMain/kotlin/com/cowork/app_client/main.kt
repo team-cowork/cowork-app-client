@@ -37,6 +37,7 @@ import com.cowork.app_client.data.repository.ChannelRepository
 import com.cowork.app_client.data.repository.ChatRepository
 import com.cowork.app_client.data.repository.PreferenceRepository
 import com.cowork.app_client.data.repository.TeamRepository
+import com.cowork.app_client.data.repository.UserRepository
 import com.cowork.app_client.di.commonModule
 import com.cowork.app_client.di.jvmModule
 import com.cowork.app_client.feature.auth.DesktopOAuthCallbackRegistry
@@ -70,6 +71,7 @@ fun main(args: Array<String>) {
             channelRepository = koin.get<ChannelRepository>(),
             chatRepository = koin.get<ChatRepository>(),
             preferenceRepository = koin.get<PreferenceRepository>(),
+            userRepository = koin.get<UserRepository>(),
             oAuthLauncher = koin.get<OAuthLauncher>(),
         )
     }

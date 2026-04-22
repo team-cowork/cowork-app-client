@@ -5,6 +5,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,9 +26,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -36,12 +42,22 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.cowork.app_client.domain.model.Channel
 import com.cowork.app_client.domain.model.ChannelType
@@ -51,9 +67,21 @@ import com.cowork.app_client.domain.model.UserStatus
 import com.cowork.app_client.feature.main.component.MainComponent
 import com.cowork.app_client.feature.main.store.MainStore
 import com.cowork.app_client.ui.theme.CoworkColors
+import com.cowork.app_client.util.decodeImageBitmap
+import io.ktor.client.HttpClient
+import io.ktor.client.request.get
+import io.ktor.client.statement.readRawBytes
 
 private val StatusOnlineColor = Color(0xFF23A55A)
 private val StatusDndColor = Color(0xFFF23F42)
+
+private val DndOptions = listOf(
+    "30분" to 0.5,
+    "1시간" to 1.0,
+    "2시간" to 2.0,
+    "4시간" to 4.0,
+    "해제 없음" to null,
+)
 
 @Composable
 fun MainScreen(component: MainComponent) {
@@ -337,44 +365,17 @@ private fun AccountBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        // 아바타 + 상태 도트
-        Box {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center,
-            ) {
-                val initial = state.accountEmail?.firstOrNull()?.uppercase() ?: "?"
-                Text(
-                    text = initial,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-            // 상태 도트
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .align(Alignment.BottomEnd),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(state.accountStatus.dotColor()),
-                )
-            }
-        }
+        ProfileAvatar(
+            imageUrl = state.accountProfileImageUrl,
+            fallback = state.accountInitial(),
+            size = 36.dp,
+            status = state.accountStatus,
+            ringColor = MaterialTheme.colorScheme.surface,
+        )
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = state.accountEmail ?: "내 계정",
+                text = state.accountDisplayName(),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -400,37 +401,114 @@ private fun AccountMenuCard(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(8.dp),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shadowElevation = 8.dp,
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 4.dp,
+        shadowElevation = 12.dp,
     ) {
         Column {
-            // 사용자 정보 헤더
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                    .height(76.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primary,
+                                CoworkColors.Red700,
+                            ),
+                        ),
+                    ),
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                TextButton(
+                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+                    onClick = onDismiss,
+                ) {
                     Text(
-                        text = state.accountEmail ?: "내 계정",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
+                        text = "닫기",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(34.dp)
+                    .padding(horizontal = 16.dp),
+            ) {
+                ProfileAvatar(
+                    imageUrl = state.accountProfileImageUrl,
+                    fallback = state.accountInitial(),
+                    size = 68.dp,
+                    status = state.accountStatus,
+                    ringColor = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.offset(y = (-34).dp),
+                )
+            }
+
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text(
+                    text = state.accountDisplayName(),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+
+                Text(
+                    text = state.accountEmail ?: "이메일 정보 없음",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+
+                val profileLine = listOfNotNull(
+                    state.accountStudentNumber?.takeIf { it.isNotBlank() },
+                    state.accountMajor?.takeIf { it.isNotBlank() },
+                    state.accountStudentRole?.takeIf { it.isNotBlank() },
+                ).joinToString(" · ")
+
+                if (profileLine.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = profileLine,
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                TextButton(onClick = onDismiss) {
-                    Text("닫기", style = MaterialTheme.typography.labelSmall)
+
+                state.accountGithub?.takeIf { it.isNotBlank() }?.let { github ->
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "GitHub @$github",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+                state.accountDescription?.takeIf { it.isNotBlank() }?.let { description ->
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
 
+            Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider()
 
-            // 상태 섹션
             Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
                 Text(
                     text = "상태",
@@ -456,25 +534,19 @@ private fun AccountMenuCard(
                     onSelect = null,
                 )
 
-                // 방해금지 만료 시간 선택 (방해금지 선택 시 표시)
-                if (state.accountStatus != UserStatus.DoNotDisturb) {
-                    DndExpiryRow(
-                        isLoading = state.isUpdatingStatus,
-                        onSelect = { hours -> onStatusChange(UserStatus.DoNotDisturb, hours) },
-                    )
-                } else {
-                    // 이미 방해금지인 경우: 온라인으로 변경하거나 만료 시간 재설정
-                    DndExpiryRow(
-                        label = "만료 시간 재설정",
-                        isLoading = state.isUpdatingStatus,
-                        onSelect = { hours -> onStatusChange(UserStatus.DoNotDisturb, hours) },
-                    )
-                }
+                DndExpirySelector(
+                    label = if (state.accountStatus == UserStatus.DoNotDisturb) {
+                        "만료 시간 재설정"
+                    } else {
+                        "방해금지 시간"
+                    },
+                    isLoading = state.isUpdatingStatus,
+                    onSelect = { hours -> onStatusChange(UserStatus.DoNotDisturb, hours) },
+                )
             }
 
             HorizontalDivider()
 
-            // 로그아웃
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -491,6 +563,86 @@ private fun AccountMenuCard(
             }
         }
     }
+}
+
+@Composable
+private fun ProfileAvatar(
+    imageUrl: String?,
+    fallback: String,
+    size: Dp,
+    status: UserStatus?,
+    ringColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val image = rememberRemoteImageBitmap(imageUrl)
+    val dotOuterSize = if (size >= 60.dp) 18.dp else 12.dp
+    val dotInnerSize = if (size >= 60.dp) 12.dp else 8.dp
+
+    Box(modifier = modifier.size(size)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (image != null) {
+                Image(
+                    bitmap = image,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Text(
+                    text = fallback,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    style = if (size >= 60.dp) {
+                        MaterialTheme.typography.headlineSmall
+                    } else {
+                        MaterialTheme.typography.labelLarge
+                    },
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+
+        if (status != null) {
+            Box(
+                modifier = Modifier
+                    .size(dotOuterSize)
+                    .clip(CircleShape)
+                    .background(ringColor)
+                    .align(Alignment.BottomEnd),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(dotInnerSize)
+                        .clip(CircleShape)
+                        .background(status.dotColor()),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberRemoteImageBitmap(imageUrl: String?): ImageBitmap? {
+    val imageState = produceState<ImageBitmap?>(initialValue = null, key1 = imageUrl) {
+        value = null
+        val url = imageUrl?.takeIf { it.isNotBlank() } ?: return@produceState
+        val client = HttpClient()
+        try {
+            value = runCatching {
+                decodeImageBitmap(client.get(url).readRawBytes())
+            }.getOrNull()
+        } finally {
+            client.close()
+        }
+    }
+
+    return imageState.value
 }
 
 @Composable
@@ -532,56 +684,80 @@ private fun StatusOption(
 }
 
 @Composable
-private fun DndExpiryRow(
-    label: String = "방해금지",
+private fun DndExpirySelector(
+    label: String,
     isLoading: Boolean,
     onSelect: (Double?) -> Unit,
 ) {
+    var expanded by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.padding(start = 28.dp, end = 8.dp, bottom = 4.dp)) {
         Text(
-            text = "$label 시간 설정",
+            text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(
-                "30분" to 0.5,
-                "1시간" to 1.0,
-                "2시간" to 2.0,
-                "4시간" to 4.0,
-                "해제없음" to null,
-            ).forEach { (labelText, hours) ->
-                ExpiryChip(
-                    text = labelText,
-                    enabled = !isLoading,
-                    onClick = { onSelect(hours) },
-                )
+        Box {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (!isLoading) Modifier.clickable { expanded = true } else Modifier),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(
+                    alpha = if (isLoading) 0.5f else 1f,
+                ),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "시간 선택",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                    DropdownChevron(color = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                DndOptions.forEach { (labelText, hours) ->
+                    DropdownMenuItem(
+                        text = { Text(labelText) },
+                        onClick = {
+                            expanded = false
+                            onSelect(hours)
+                        },
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ExpiryChip(
-    text: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    Text(
-        text = text,
-        modifier = Modifier
-            .clip(MaterialTheme.shapes.small)
-            .background(
-                if (enabled) MaterialTheme.colorScheme.secondaryContainer
-                else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
-            )
-            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        style = MaterialTheme.typography.labelSmall,
-        color = if (enabled) MaterialTheme.colorScheme.onSecondaryContainer
-                else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.4f),
-    )
+private fun DropdownChevron(color: Color) {
+    Canvas(modifier = Modifier.size(16.dp)) {
+        val strokeWidth = 2.dp.toPx()
+        drawLine(
+            color = color,
+            start = Offset(size.width * 0.28f, size.height * 0.42f),
+            end = Offset(size.width * 0.5f, size.height * 0.64f),
+            strokeWidth = strokeWidth,
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = color,
+            start = Offset(size.width * 0.72f, size.height * 0.42f),
+            end = Offset(size.width * 0.5f, size.height * 0.64f),
+            strokeWidth = strokeWidth,
+            cap = StrokeCap.Round,
+        )
+    }
 }
 
 @Composable
@@ -875,6 +1051,15 @@ private fun TypeButton(
         fontWeight = FontWeight.Bold,
     )
 }
+
+private fun MainStore.State.accountDisplayName(): String =
+    accountNickname?.takeIf { it.isNotBlank() }
+        ?: accountName?.takeIf { it.isNotBlank() }
+        ?: accountEmail?.takeIf { it.isNotBlank() }
+        ?: "내 계정"
+
+private fun MainStore.State.accountInitial(): String =
+    accountDisplayName().firstOrNull()?.uppercase() ?: "?"
 
 private fun UserStatus.dotColor(): Color = when (this) {
     UserStatus.Online -> StatusOnlineColor
