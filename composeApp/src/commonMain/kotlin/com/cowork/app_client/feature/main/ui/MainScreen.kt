@@ -33,8 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -97,7 +95,7 @@ fun MainScreen(component: MainComponent) {
     val state by component.state.collectAsState()
     val density = LocalDensity.current
     var teamRailWidth by remember {
-        mutableStateOf(component.layoutPreferenceStorage.getTeamRailWidth()?.dp?.coerceIn(80.dp, 104.dp) ?: 88.dp)
+        mutableStateOf(component.layoutPreferenceStorage.getTeamRailWidth()?.dp?.coerceIn(60.dp, 80.dp) ?: 68.dp)
     }
     var channelPaneWidth by remember {
         mutableStateOf(component.layoutPreferenceStorage.getChannelPaneWidth()?.dp?.coerceIn(220.dp, 420.dp) ?: 280.dp)
@@ -136,7 +134,7 @@ fun MainScreen(component: MainComponent) {
                 xOffset = teamRailWidth - 3.dp,
                     onDrag = { delta ->
                         teamRailWidth = with(density) {
-                            (teamRailWidth + delta.toDp()).coerceIn(80.dp, 104.dp)
+                            (teamRailWidth + delta.toDp()).coerceIn(60.dp, 80.dp)
                         }
                         component.layoutPreferenceStorage.saveTeamRailWidth(teamRailWidth.value)
                     },
@@ -168,7 +166,7 @@ fun MainScreen(component: MainComponent) {
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(start = teamRailWidth + 2.dp, bottom = 64.dp)
-                    .width(280.dp),
+                    .width(436.dp),
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {
@@ -220,14 +218,9 @@ private fun TeamRail(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = "cowork",
-            color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-        )
+        CoworkLogoIcon()
 
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 10.dp))
 
         if (state.isLoadingTeams) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
@@ -245,10 +238,94 @@ private fun TeamRail(
                     onClick = { onTeamClick(team.id) },
                 )
             }
-        }
 
-        TextButton(onClick = onCreateTeamClick) {
-            Text("+")
+            item {
+                AddTeamButton(onClick = onCreateTeamClick)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddTeamButton(onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(if (isHovered) RoundedCornerShape(12.dp) else CircleShape)
+            .background(
+                if (isHovered) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                else MaterialTheme.colorScheme.surfaceVariant
+            )
+            .hoverable(interactionSource)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.size(14.dp)) {
+            val stroke = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 2.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+            val cx = size.width / 2f
+            val cy = size.height / 2f
+            val arm = size.minDimension * 0.42f
+            val green = androidx.compose.ui.graphics.Color(0xFF23A55A)
+            drawLine(
+                color = green,
+                start = Offset(cx - arm, cy),
+                end = Offset(cx + arm, cy),
+                strokeWidth = stroke.width,
+                cap = stroke.cap,
+            )
+            drawLine(
+                color = green,
+                start = Offset(cx, cy - arm),
+                end = Offset(cx, cy + arm),
+                strokeWidth = stroke.width,
+                cap = stroke.cap,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CoworkLogoIcon() {
+    val primary = MaterialTheme.colorScheme.primary
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(primary, CoworkColors.Red700),
+                )
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.size(20.dp)) {
+            val w = size.width
+            val h = size.height
+            val stroke = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 2.2.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+            // "C" arc: ~240° arc leaving a gap on the right
+            drawArc(
+                color = onPrimary,
+                startAngle = 45f,
+                sweepAngle = 270f,
+                useCenter = false,
+                style = stroke,
+            )
+            // small dot to the right of the gap, representing "W" node
+            drawCircle(
+                color = onPrimary,
+                radius = 2.dp.toPx(),
+                center = Offset(w * 0.82f, h * 0.5f),
+            )
         }
     }
 }
@@ -468,165 +545,179 @@ private fun AccountMenuCard(
     onUploadProfileImage: (ByteArray, String) -> Unit,
 ) {
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(8.dp),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
-        border = BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
-        ),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-    ) {
-        Column {
-            Box(modifier = Modifier.fillMaxWidth().height(110.dp)) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(76.dp)
-                        .align(Alignment.TopStart)
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primary,
-                                    CoworkColors.Red700,
+    var isDndSelectorOpen by remember(state.accountStatus) {
+        mutableStateOf(state.accountStatus == UserStatus.DoNotDisturb)
+    }
+
+    Box(modifier = Modifier.width(436.dp)) {
+        Surface(
+            modifier = Modifier.width(280.dp).padding(8.dp),
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+            border = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+            ),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+        ) {
+            Column {
+                Box(modifier = Modifier.fillMaxWidth().height(110.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(76.dp)
+                            .align(Alignment.TopStart)
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.primary,
+                                        CoworkColors.Red700,
+                                    ),
                                 ),
                             ),
-                        ),
-                )
+                    )
 
-                ProfileAvatar(
-                    imageUrl = state.accountProfileImageUrl,
-                    fallback = state.accountInitial(),
-                    size = 68.dp,
-                    status = state.accountStatus,
-                    ringColor = MaterialTheme.colorScheme.surface,
-                    isUploading = state.isUploadingProfileImage,
-                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp),
-                    onEditClick = {
-                        coroutineScope.launch {
-                            val result = pickImageBytes()
-                            if (result != null) onUploadProfileImage(result.first, result.second)
-                        }
-                    },
-                )
-            }
+                    ProfileAvatar(
+                        imageUrl = state.accountProfileImageUrl,
+                        fallback = state.accountInitial(),
+                        size = 68.dp,
+                        status = state.accountStatus,
+                        ringColor = MaterialTheme.colorScheme.surface,
+                        isUploading = state.isUploadingProfileImage,
+                        modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp),
+                        onEditClick = {
+                            coroutineScope.launch {
+                                val result = pickImageBytes()
+                                if (result != null) onUploadProfileImage(result.first, result.second)
+                            }
+                        },
+                    )
+                }
 
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text(
-                    text = state.accountDisplayName(),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-
-                Text(
-                    text = state.accountEmail ?: "이메일 정보 없음",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-
-                val profileLine = listOfNotNull(
-                    state.accountStudentNumber?.takeIf { it.isNotBlank() },
-                    state.accountMajor?.takeIf { it.isNotBlank() },
-                    state.accountStudentRole?.takeIf { it.isNotBlank() },
-                ).joinToString(" · ")
-
-                if (profileLine.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                     Text(
-                        text = profileLine,
-                        style = MaterialTheme.typography.labelMedium,
+                        text = state.accountDisplayName(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+
+                    Text(
+                        text = state.accountEmail ?: "이메일 정보 없음",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+
+                    val profileLine = listOfNotNull(
+                        state.accountStudentNumber?.takeIf { it.isNotBlank() },
+                        state.accountMajor?.takeIf { it.isNotBlank() },
+                        state.accountStudentRole?.takeIf { it.isNotBlank() },
+                    ).joinToString(" · ")
+
+                    if (profileLine.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = profileLine,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+
+                    state.accountGithub?.takeIf { it.isNotBlank() }?.let { github ->
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "GitHub @$github",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+
+                    state.accountDescription?.takeIf { it.isNotBlank() }?.let { description ->
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
 
-                state.accountGithub?.takeIf { it.isNotBlank() }?.let { github ->
-                    Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider()
+
+                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
                     Text(
-                        text = "GitHub @$github",
+                        text = "상태",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                    )
+
+                    CompactStatusOption(
+                        label = "온라인",
+                        status = UserStatus.Online,
+                        currentStatus = state.accountStatus,
+                        isLoading = state.isUpdatingStatus,
+                        onSelect = {
+                            isDndSelectorOpen = false
+                            onStatusChange(UserStatus.Online, null)
+                        },
+                    )
+
+                    DndStatusOption(
+                        currentStatus = state.accountStatus,
+                        isLoading = state.isUpdatingStatus,
+                        isSelectorOpen = isDndSelectorOpen,
+                        onToggleSelector = {
+                            if (!state.isUpdatingStatus) {
+                                isDndSelectorOpen = !isDndSelectorOpen
+                            }
+                        },
+                    )
+                }
+
+                HorizontalDivider()
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onSignOut)
+                        .padding(horizontal = 16.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "로그아웃",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-
-                state.accountDescription?.takeIf { it.isNotBlank() }?.let { description ->
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider()
-
-            var isDndSelectorOpen by remember(state.accountStatus) {
-                mutableStateOf(state.accountStatus == UserStatus.DoNotDisturb)
-            }
-
-            Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
-                Text(
-                    text = "상태",
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Bold,
-                )
-
-                CompactStatusOption(
-                    label = "온라인",
-                    status = UserStatus.Online,
-                    currentStatus = state.accountStatus,
-                    isLoading = state.isUpdatingStatus,
-                    onSelect = {
-                        isDndSelectorOpen = false
-                        onStatusChange(UserStatus.Online, null)
-                    },
-                )
-
-                DndStatusOption(
-                    currentStatus = state.accountStatus,
-                    isLoading = state.isUpdatingStatus,
-                    isSelectorOpen = isDndSelectorOpen,
-                    onToggleSelector = {
-                        if (!state.isUpdatingStatus) {
-                            isDndSelectorOpen = !isDndSelectorOpen
-                        }
-                    },
-                    onSelect = { hours -> onStatusChange(UserStatus.DoNotDisturb, hours) },
-                )
-            }
-
-            HorizontalDivider()
-
-            Row(
+        if (isDndSelectorOpen) {
+            DndExpiryFlyout(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onSignOut)
-                    .padding(horizontal = 16.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = "로그아웃",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
+                    .align(Alignment.BottomStart)
+                    .padding(start = 280.dp, bottom = 48.dp),
+                isLoading = state.isUpdatingStatus,
+                onSelect = { hours ->
+                    onStatusChange(UserStatus.DoNotDisturb, hours)
+                    isDndSelectorOpen = false
+                },
+            )
         }
     }
 }
@@ -794,7 +885,6 @@ private fun DndStatusOption(
     isLoading: Boolean,
     isSelectorOpen: Boolean,
     onToggleSelector: () -> Unit,
-    onSelect: (Double?) -> Unit,
 ) {
     val isSelected = currentStatus == UserStatus.DoNotDisturb
 
@@ -821,62 +911,80 @@ private fun DndStatusOption(
             overflow = TextOverflow.Ellipsis,
         )
 
-        if (isSelectorOpen) {
-            InlineDndExpirySelector(
-                isLoading = isLoading,
-                onSelect = onSelect,
+        ChevronRight(
+            color = if (isSelectorOpen) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+    }
+}
+
+@Composable
+private fun DndExpiryFlyout(
+    modifier: Modifier = Modifier,
+    isLoading: Boolean,
+    onSelect: (Double?) -> Unit,
+) {
+    Surface(
+        modifier = modifier.width(142.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.94f),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.24f),
+        ),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Column(modifier = Modifier.padding(6.dp)) {
+            Text(
+                text = "방해금지 시간",
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
             )
-        } else {
-            ChevronRight(color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            DndOptions.forEach { (labelText, hours) ->
+                DndExpiryOption(
+                    label = labelText,
+                    enabled = !isLoading,
+                    onClick = { onSelect(hours) },
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun InlineDndExpirySelector(
-    isLoading: Boolean,
-    onSelect: (Double?) -> Unit,
+private fun DndExpiryOption(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box {
-        Surface(
-            modifier = Modifier
-                .width(104.dp)
-                .height(26.dp)
-                .then(if (!isLoading) Modifier.clickable { expanded = true } else Modifier),
-            shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(
-                alpha = if (isLoading) 0.5f else 1f,
-            ),
-        ) {
-            Row(
-                modifier = Modifier.padding(start = 8.dp, end = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "시간",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-                DropdownChevron(color = MaterialTheme.colorScheme.onSecondaryContainer)
-            }
-        }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            DndOptions.forEach { (labelText, hours) ->
-                DropdownMenuItem(
-                    text = { Text(labelText) },
-                    onClick = {
-                        expanded = false
-                        onSelect(hours)
-                    },
-                )
-            }
-        }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (enabled) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f)
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -905,27 +1013,6 @@ private fun StatusGlyph(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun DropdownChevron(color: Color) {
-    Canvas(modifier = Modifier.size(16.dp)) {
-        val strokeWidth = 2.dp.toPx()
-        drawLine(
-            color = color,
-            start = Offset(size.width * 0.28f, size.height * 0.42f),
-            end = Offset(size.width * 0.5f, size.height * 0.64f),
-            strokeWidth = strokeWidth,
-            cap = StrokeCap.Round,
-        )
-        drawLine(
-            color = color,
-            start = Offset(size.width * 0.72f, size.height * 0.42f),
-            end = Offset(size.width * 0.5f, size.height * 0.64f),
-            strokeWidth = strokeWidth,
-            cap = StrokeCap.Round,
-        )
     }
 }
 
