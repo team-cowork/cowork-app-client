@@ -140,9 +140,18 @@ jobs:
           NOTARIZATION_PWD: ${{ secrets.NOTARIZATION_PWD }}
           NOTARIZATION_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
         run: |
+          set -euo pipefail
+
+          run_with_timeout() {
+            local seconds="$1"
+            shift
+            perl -e 'alarm shift; exec @ARGV' "$seconds" "$@"
+          }
+
           DMG="composeApp/build/compose/binaries/main-release/dmg/${{ steps.version.outputs.dmg_name }}"
 
-          xcrun notarytool submit "$DMG" \
+          run_with_timeout 600 xcrun notarytool submit "$DMG" \
+            --no-s3-acceleration \
             --apple-id "$NOTARIZATION_APPLE_ID" \
             --password "$NOTARIZATION_PWD" \
             --team-id "$NOTARIZATION_TEAM_ID" \
@@ -153,7 +162,7 @@ jobs:
 
           for attempt in {1..90}; do
             echo "Checking DMG notarization status, attempt ${attempt}/90"
-            if xcrun notarytool info "$DMG_NOTARIZATION_ID" \
+            if run_with_timeout 120 xcrun notarytool info "$DMG_NOTARIZATION_ID" \
               --apple-id "$NOTARIZATION_APPLE_ID" \
               --password "$NOTARIZATION_PWD" \
               --team-id "$NOTARIZATION_TEAM_ID" \
@@ -175,7 +184,7 @@ jobs:
                 exit 1
               fi
             else
-              echo "Failed to query DMG notarization status. Retrying..."
+              echo "Failed or timed out while querying DMG notarization status. Retrying..."
             fi
 
             sleep 20
