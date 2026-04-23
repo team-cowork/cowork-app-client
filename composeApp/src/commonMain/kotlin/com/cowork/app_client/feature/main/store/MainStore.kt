@@ -20,6 +20,7 @@ interface MainStore : Store<Intent, State, Label> {
         data object CloseCreateTeam : Intent
         data class ChangeCreateTeamName(val name: String) : Intent
         data class ChangeCreateTeamDescription(val description: String) : Intent
+        data class SetCreateTeamIcon(val bytes: ByteArray, val contentType: String) : Intent
         data object SubmitCreateTeam : Intent
         data object OpenCreateChannel : Intent
         data object CloseCreateChannel : Intent
@@ -50,6 +51,8 @@ interface MainStore : Store<Intent, State, Label> {
         val isCreateTeamOpen: Boolean = false,
         val createTeamName: String = "",
         val createTeamDescription: String = "",
+        val createTeamIconBytes: ByteArray? = null,
+        val createTeamIconContentType: String? = null,
         val isCreatingTeam: Boolean = false,
         val isCreateChannelOpen: Boolean = false,
         val createChannelName: String = "",

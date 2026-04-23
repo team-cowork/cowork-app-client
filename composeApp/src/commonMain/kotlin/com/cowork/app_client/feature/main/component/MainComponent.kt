@@ -16,6 +16,7 @@ interface MainComponent {
     fun onCreateTeamDismiss()
     fun onCreateTeamNameChange(name: String)
     fun onCreateTeamDescriptionChange(description: String)
+    fun onCreateTeamIconChange(bytes: ByteArray, contentType: String)
     fun onCreateTeamSubmit()
     fun onCreateChannelClick()
     fun onCreateChannelDismiss()

@@ -72,6 +72,7 @@ class DefaultMainComponent(
     override fun onCreateTeamDismiss() = store.accept(MainStore.Intent.CloseCreateTeam)
     override fun onCreateTeamNameChange(name: String) = store.accept(MainStore.Intent.ChangeCreateTeamName(name))
     override fun onCreateTeamDescriptionChange(description: String) = store.accept(MainStore.Intent.ChangeCreateTeamDescription(description))
+    override fun onCreateTeamIconChange(bytes: ByteArray, contentType: String) = store.accept(MainStore.Intent.SetCreateTeamIcon(bytes, contentType))
     override fun onCreateTeamSubmit() = store.accept(MainStore.Intent.SubmitCreateTeam)
     override fun onCreateChannelClick() = store.accept(MainStore.Intent.OpenCreateChannel)
     override fun onCreateChannelDismiss() = store.accept(MainStore.Intent.CloseCreateChannel)

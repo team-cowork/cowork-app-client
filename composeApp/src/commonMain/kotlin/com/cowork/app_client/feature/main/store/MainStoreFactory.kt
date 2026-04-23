@@ -61,6 +61,7 @@ class MainStoreFactory(
                 Intent.CloseCreateTeam -> dispatch(Msg.ResetCreateTeamForm)
                 is Intent.ChangeCreateTeamName -> dispatch(Msg.SetCreateTeamName(intent.name))
                 is Intent.ChangeCreateTeamDescription -> dispatch(Msg.SetCreateTeamDescription(intent.description))
+                is Intent.SetCreateTeamIcon -> dispatch(Msg.SetCreateTeamIcon(intent.bytes, intent.contentType))
                 Intent.SubmitCreateTeam -> createTeam()
                 Intent.OpenCreateChannel -> dispatch(Msg.SetCreateChannelOpen(true))
                 Intent.CloseCreateChannel -> dispatch(Msg.ResetCreateChannelForm)
@@ -173,16 +174,17 @@ class MainStoreFactory(
         private fun createTeam() {
             val name = state().createTeamName.trim()
             val description = state().createTeamDescription.trim().ifBlank { null }
+            val iconBytes = state().createTeamIconBytes
+            val iconContentType = state().createTeamIconContentType
             if (name.isBlank() || state().isCreatingTeam) return
 
             scope.launch {
                 dispatch(Msg.SetCreatingTeam(true))
                 runCatching {
-                    teamRepository.createTeam(
-                        name = name,
-                        description = description,
-                        iconUrl = null,
-                    )
+                    val iconUrl = if (iconBytes != null && iconContentType != null) {
+                        teamRepository.uploadTeamIcon(iconBytes, iconContentType)
+                    } else null
+                    teamRepository.createTeam(name = name, description = description, iconUrl = iconUrl)
                 }.onSuccess {
                     dispatch(Msg.ResetCreateTeamForm)
                     loadTeams()
@@ -276,6 +278,7 @@ class MainStoreFactory(
         data class SetCreateTeamOpen(val isOpen: Boolean) : Msg
         data class SetCreateTeamName(val name: String) : Msg
         data class SetCreateTeamDescription(val description: String) : Msg
+        data class SetCreateTeamIcon(val bytes: ByteArray, val contentType: String) : Msg
         data class SetCreatingTeam(val isCreating: Boolean) : Msg
         data class SetCreateChannelOpen(val isOpen: Boolean) : Msg
         data class SetCreateChannelName(val name: String) : Msg
@@ -321,6 +324,7 @@ class MainStoreFactory(
             is Msg.SetCreateTeamOpen -> copy(isCreateTeamOpen = msg.isOpen, error = null)
             is Msg.SetCreateTeamName -> copy(createTeamName = msg.name)
             is Msg.SetCreateTeamDescription -> copy(createTeamDescription = msg.description)
+            is Msg.SetCreateTeamIcon -> copy(createTeamIconBytes = msg.bytes, createTeamIconContentType = msg.contentType)
             is Msg.SetCreatingTeam -> copy(isCreatingTeam = msg.isCreating)
             is Msg.SetCreateChannelOpen -> copy(isCreateChannelOpen = msg.isOpen, error = null)
             is Msg.SetCreateChannelName -> copy(createChannelName = msg.name)
@@ -332,6 +336,8 @@ class MainStoreFactory(
                 isCreateTeamOpen = false,
                 createTeamName = "",
                 createTeamDescription = "",
+                createTeamIconBytes = null,
+                createTeamIconContentType = null,
                 isCreatingTeam = false,
             )
             Msg.ResetCreateChannelForm -> copy(
