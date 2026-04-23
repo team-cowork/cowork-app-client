@@ -17,6 +17,13 @@ class DefaultTeamRepository(
     override suspend fun createTeam(name: String, description: String?, iconUrl: String?): Team =
         authorized { accessToken -> teamApi.createTeam(accessToken, name, description, iconUrl) }
 
+    override suspend fun uploadTeamIcon(bytes: ByteArray, contentType: String): String =
+        authorized { accessToken ->
+            val presigned = teamApi.generateIconPresignedUrl(accessToken, contentType)
+            teamApi.putIconToS3(presigned.uploadUrl, bytes, contentType)
+            teamApi.confirmIconUpload(accessToken, presigned.objectKey)
+        }
+
     private suspend fun <T> authorized(block: suspend (String) -> T): T {
         val tokens = authRepository.getStoredTokens() ?: error("로그인이 필요합니다.")
         return try {
