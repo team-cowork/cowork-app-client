@@ -8,6 +8,7 @@ import com.cowork.app_client.data.repository.AuthRepository
 import com.cowork.app_client.data.repository.ChannelRepository
 import com.cowork.app_client.data.repository.ChatRepository
 import com.cowork.app_client.data.repository.PreferenceRepository
+import com.cowork.app_client.data.repository.SessionExpiredException
 import com.cowork.app_client.data.repository.TeamRepository
 import com.cowork.app_client.data.repository.UserRepository
 import com.cowork.app_client.domain.model.Channel
@@ -80,6 +81,13 @@ class MainStoreFactory(
             }
         }
 
+        // SessionExpiredException이면 강제 로그아웃 Label을 발행하고 true를 반환
+        private fun Throwable.handleIfSessionExpired(): Boolean {
+            if (this !is SessionExpiredException) return false
+            publish(Label.SignedOut)
+            return true
+        }
+
         private fun init() {
             scope.launch {
                 val tokens = authRepository.getStoredTokens()
@@ -95,7 +103,9 @@ class MainStoreFactory(
                 }
             }
             scope.launch {
-                val profile = runCatching { userRepository.getMyProfile() }.getOrNull()
+                val profile = runCatching { userRepository.getMyProfile() }
+                    .onFailure { it.handleIfSessionExpired() }
+                    .getOrNull()
                 if (profile != null) {
                     dispatch(Msg.SetUserProfile(profile))
                 }
@@ -120,6 +130,7 @@ class MainStoreFactory(
                         }
                     }
                     .onFailure {
+                        if (it.handleIfSessionExpired()) return@launch
                         if (!silent) dispatch(Msg.SetError("팀 목록을 불러오지 못했습니다."))
                     }
                 if (!silent) dispatch(Msg.SetLoadingTeams(false))
@@ -151,7 +162,10 @@ class MainStoreFactory(
                             loadMessages(selectedChannelId)
                         }
                     }
-                    .onFailure { dispatch(Msg.SetChannels(emptyList())) }
+                    .onFailure {
+                        if (it.handleIfSessionExpired()) return@launch
+                        dispatch(Msg.SetChannels(emptyList()))
+                    }
                 dispatch(Msg.SetLoadingChannels(false))
             }
         }
@@ -166,7 +180,10 @@ class MainStoreFactory(
                 dispatch(Msg.SetLoadingMessages(true))
                 runCatching { chatRepository.getMessages(channelId) }
                     .onSuccess { messages -> dispatch(Msg.SetMessages(messages)) }
-                    .onFailure { dispatch(Msg.SetMessages(emptyList())) }
+                    .onFailure {
+                        if (it.handleIfSessionExpired()) return@launch
+                        dispatch(Msg.SetMessages(emptyList()))
+                    }
                 dispatch(Msg.SetLoadingMessages(false))
             }
         }
@@ -189,6 +206,7 @@ class MainStoreFactory(
                     dispatch(Msg.ResetCreateTeamForm)
                     loadTeams()
                 }.onFailure {
+                    if (it.handleIfSessionExpired()) return@launch
                     dispatch(Msg.SetError("팀을 생성하지 못했습니다."))
                     dispatch(Msg.SetCreatingTeam(false))
                 }
@@ -217,6 +235,7 @@ class MainStoreFactory(
                     loadChannels(channel.teamId)
                     selectChannel(channel.id)
                 }.onFailure {
+                    if (it.handleIfSessionExpired()) return@launch
                     dispatch(Msg.SetError("채널을 생성하지 못했습니다. 서버의 cowork-channel API가 필요합니다."))
                     dispatch(Msg.SetCreatingChannel(false))
                 }
@@ -234,6 +253,7 @@ class MainStoreFactory(
                     dispatch(Msg.SetAccountStatus(status))
                     dispatch(Msg.SetAccountMenuOpen(false))
                 }.onFailure {
+                    if (it.handleIfSessionExpired()) return@launch
                     dispatch(Msg.SetError("상태를 변경하지 못했습니다."))
                 }
                 dispatch(Msg.SetUpdatingStatus(false))
@@ -251,12 +271,14 @@ class MainStoreFactory(
             if (state().isUploadingProfileImage) return
             scope.launch {
                 dispatch(Msg.SetUploadingProfileImage(true))
-                val success = runCatching {
-                    userRepository.uploadProfileImage(bytes, contentType)
-                }.getOrDefault(false)
+                val result = runCatching { userRepository.uploadProfileImage(bytes, contentType) }
+                result.onFailure { if (it.handleIfSessionExpired()) return@launch }
+                val success = result.getOrDefault(false)
 
                 if (success) {
-                    val profile = runCatching { userRepository.getMyProfile() }.getOrNull()
+                    val profile = runCatching { userRepository.getMyProfile() }
+                        .onFailure { it.handleIfSessionExpired() }
+                        .getOrNull()
                     if (profile != null) dispatch(Msg.SetUserProfile(profile))
                 } else {
                     dispatch(Msg.SetError("프로필 사진을 업로드하지 못했습니다."))
