@@ -47,22 +47,38 @@ class ConnectivityMonitor(
         }
     }
 
-    // 백오프 대기 중에도 BACKOFF_POLL_MS 간격으로 헬스체크 → 복구 시 즉시 재연결
+    // 카운트다운(1초 tick)과 헬스체크(BACKOFF_POLL_MS 간격)를 별도 코루틴으로 분리
+    // → 헬스체크 지연 시간이 카운트다운 정확도에 영향을 주지 않음
     private suspend fun waitWithEarlyRecovery(backoffMs: Long): Boolean {
         val endTimeMs = System.currentTimeMillis() + backoffMs
-        while (true) {
-            val remainingMs = endTimeMs - System.currentTimeMillis()
-            if (remainingMs <= 0) break
-            _retryIn.value = (remainingMs / 1_000L).coerceAtLeast(1L)
-            delay(minOf(BACKOFF_POLL_MS, remainingMs))
-            if (checkHealth()) {
-                _isConnected.value = true
-                _retryIn.value = 0
-                return true
+        val recovered = MutableStateFlow(false)
+
+        val healthJob = scope.launch {
+            delay(BACKOFF_POLL_MS)
+            while (isActive && !recovered.value) {
+                if (checkHealth()) {
+                    _isConnected.value = true
+                    _retryIn.value = 0
+                    recovered.value = true
+                    return@launch
+                }
+                delay(BACKOFF_POLL_MS)
             }
         }
-        _retryIn.value = 0
-        return false
+
+        try {
+            while (!recovered.value) {
+                val remainingMs = endTimeMs - System.currentTimeMillis()
+                if (remainingMs <= 0) break
+                _retryIn.value = (remainingMs / 1_000L).coerceAtLeast(1L)
+                delay(1_000L)
+            }
+        } finally {
+            healthJob.cancel()
+            _retryIn.value = 0
+        }
+
+        return recovered.value
     }
 
     // 5->5->5->10->15->30->30->45->60->60->80->80->random(80..120,5회)->120 forever
