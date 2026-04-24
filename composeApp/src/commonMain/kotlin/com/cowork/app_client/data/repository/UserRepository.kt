@@ -13,34 +13,34 @@ class DefaultUserRepository(
     private val userApi: UserApi,
 ) : UserRepository {
 
-    override suspend fun getMyProfile(): UserProfile? {
-        val token = authRepository.getStoredTokens()?.accessToken ?: return null
-        return runCatching {
-            val response = userApi.getMyProfile(token)
-            val id = response.id ?: return null
-            UserProfile(
-                id = id,
-                name = response.name ?: "",
-                email = response.email ?: "",
-                nickname = response.nickname,
-                profileImageUrl = response.profileImageUrl,
-                github = response.github,
-                studentRole = response.studentRole,
-                studentNumber = response.studentNumber,
-                major = response.major,
-                specialty = response.specialty,
-                description = response.description ?: response.accountDescription,
-                roles = response.roles,
-            )
+    override suspend fun getMyProfile(): UserProfile? =
+        runCatching {
+            authRepository.authorized { token ->
+                val response = userApi.getMyProfile(token)
+                val id = response.id ?: return@authorized null
+                UserProfile(
+                    id = id,
+                    name = response.name ?: "",
+                    email = response.email ?: "",
+                    nickname = response.nickname,
+                    profileImageUrl = response.profileImageUrl,
+                    github = response.github,
+                    studentRole = response.studentRole,
+                    studentNumber = response.studentNumber,
+                    major = response.major,
+                    specialty = response.specialty,
+                    description = response.description ?: response.accountDescription,
+                    roles = response.roles,
+                )
+            }
         }.getOrNull()
-    }
 
-    override suspend fun uploadProfileImage(bytes: ByteArray, contentType: String): Boolean {
-        val token = authRepository.getStoredTokens()?.accessToken ?: return false
-        return runCatching {
-            val presigned = userApi.generatePresignedUrl(token, contentType)
-            userApi.putBytesToS3(presigned.uploadUrl, bytes, contentType)
-            userApi.confirmUpload(token, presigned.objectKey)
+    override suspend fun uploadProfileImage(bytes: ByteArray, contentType: String): Boolean =
+        runCatching {
+            authRepository.authorized { token ->
+                val presigned = userApi.generatePresignedUrl(token, contentType)
+                userApi.putBytesToS3(presigned.uploadUrl, bytes, contentType)
+                userApi.confirmUpload(token, presigned.objectKey)
+            }
         }.isSuccess
-    }
 }

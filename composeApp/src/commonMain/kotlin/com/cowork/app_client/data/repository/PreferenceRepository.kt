@@ -14,27 +14,27 @@ class DefaultPreferenceRepository(
     private val preferenceApi: PreferenceApi,
 ) : PreferenceRepository {
 
-    override suspend fun getAccountStatus(accountId: Long): UserStatus {
-        val token = authRepository.getStoredTokens()?.accessToken ?: return UserStatus.Online
-        val settings = runCatching {
-            preferenceApi.getAccountSettings(token, accountId)
-        }.getOrNull() ?: return UserStatus.Online
-        return settings.status.toUserStatus()
-    }
+    override suspend fun getAccountStatus(accountId: Long): UserStatus =
+        runCatching {
+            authRepository.authorized { token ->
+                preferenceApi.getAccountSettings(token, accountId).status.toUserStatus()
+            }
+        }.getOrDefault(UserStatus.Online)
 
     override suspend fun updateAccountStatus(accountId: Long, status: UserStatus, expiresInHours: Double?) {
-        val token = authRepository.getStoredTokens()?.accessToken ?: return
         val expiresAt = if (status == UserStatus.DoNotDisturb && expiresInHours != null) {
             nowPlusHoursIso8601(expiresInHours)
         } else {
             null
         }
-        preferenceApi.updateAccountSettings(
-            accessToken = token,
-            accountId = accountId,
-            status = status.toApiValue(),
-            statusExpiresAt = expiresAt,
-        )
+        authRepository.authorized { token ->
+            preferenceApi.updateAccountSettings(
+                accessToken = token,
+                accountId = accountId,
+                status = status.toApiValue(),
+                statusExpiresAt = expiresAt,
+            )
+        }
     }
 
     private fun String?.toUserStatus(): UserStatus = when (this?.uppercase()) {

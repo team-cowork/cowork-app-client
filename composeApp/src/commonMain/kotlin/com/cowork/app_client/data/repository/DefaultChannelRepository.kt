@@ -3,8 +3,6 @@ package com.cowork.app_client.data.repository
 import com.cowork.app_client.data.remote.ChannelApi
 import com.cowork.app_client.domain.model.Channel
 import com.cowork.app_client.domain.model.ChannelType
-import io.ktor.client.plugins.ClientRequestException
-import io.ktor.http.HttpStatusCode
 
 class DefaultChannelRepository(
     private val authRepository: AuthRepository,
@@ -32,17 +30,6 @@ class DefaultChannelRepository(
             )
         }
 
-    private suspend fun <T> authorized(block: suspend (String) -> T): T {
-        val tokens = authRepository.getStoredTokens() ?: error("로그인이 필요합니다.")
-        return try {
-            block(tokens.accessToken)
-        } catch (exception: ClientRequestException) {
-            if (exception.response.status != HttpStatusCode.Unauthorized) {
-                throw exception
-            }
-
-            val refreshed = authRepository.refreshTokens() ?: throw exception
-            block(refreshed.accessToken)
-        }
-    }
+    private suspend fun <T> authorized(block: suspend (String) -> T): T =
+        authRepository.authorized(block)
 }
