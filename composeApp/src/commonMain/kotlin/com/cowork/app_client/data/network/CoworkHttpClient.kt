@@ -13,6 +13,7 @@ fun createHttpClient(engine: HttpClientEngine): HttpClient = HttpClient(engine) 
         json(Json {
             ignoreUnknownKeys = true
             isLenient = true
+            explicitNulls = false
         })
     }
     install(Logging) {
