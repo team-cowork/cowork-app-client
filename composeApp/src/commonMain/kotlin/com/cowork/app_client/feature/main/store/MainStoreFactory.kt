@@ -11,11 +11,19 @@ import com.cowork.app_client.data.repository.PreferenceRepository
 import com.cowork.app_client.data.repository.SessionExpiredException
 import com.cowork.app_client.data.repository.TeamRepository
 import com.cowork.app_client.data.repository.UserRepository
+import com.cowork.app_client.domain.model.AppLanguage
+import com.cowork.app_client.domain.model.AppTheme
 import com.cowork.app_client.domain.model.Channel
 import com.cowork.app_client.domain.model.ChannelType
 import com.cowork.app_client.domain.model.ChatMessage
+import com.cowork.app_client.domain.model.DateFormat
 import com.cowork.app_client.domain.model.TeamSummary
+import com.cowork.app_client.domain.model.TimeFormat
 import com.cowork.app_client.domain.model.UserStatus
+import com.cowork.app_client.domain.model.toAppLanguage
+import com.cowork.app_client.domain.model.toAppTheme
+import com.cowork.app_client.domain.model.toDateFormat
+import com.cowork.app_client.domain.model.toTimeFormat
 import com.cowork.app_client.feature.main.store.MainStore.Intent
 import com.cowork.app_client.feature.main.store.MainStore.Label
 import com.cowork.app_client.feature.main.store.MainStore.State
@@ -78,6 +86,11 @@ class MainStoreFactory(
                 is Intent.SetStatus -> updateStatus(intent.status, intent.expiresInHours)
                 Intent.SignOut -> signOut()
                 is Intent.UploadProfileImage -> uploadProfileImage(intent.bytes, intent.contentType)
+                is Intent.UpdateTheme -> updateAppearance(theme = intent.theme)
+                is Intent.UpdateLanguage -> updateAppearance(language = intent.language)
+                is Intent.UpdateTimeFormat -> updateAppearance(timeFormat = intent.timeFormat)
+                is Intent.UpdateDateFormat -> updateAppearance(dateFormat = intent.dateFormat)
+                is Intent.UpdateMarketingEmail -> updateMarketingEmail(intent.enabled)
             }
         }
 
@@ -95,10 +108,23 @@ class MainStoreFactory(
                     val claims = parseJwtClaims(tokens.accessToken)
                     dispatch(Msg.SetAccountInfo(claims.accountId, claims.email))
                     if (claims.accountId != null) {
-                        val status = runCatching {
-                            preferenceRepository.getAccountStatus(claims.accountId)
-                        }.getOrDefault(UserStatus.Online)
-                        dispatch(Msg.SetAccountStatus(status))
+                        runCatching {
+                            preferenceRepository.getAccountSettings(claims.accountId)
+                        }.onSuccess { settings ->
+                            dispatch(Msg.SetAccountStatus(
+                                when (settings.status?.uppercase()) {
+                                    "DO_NOT_DISTURB" -> UserStatus.DoNotDisturb
+                                    else -> UserStatus.Online
+                                }
+                            ))
+                            dispatch(Msg.SetAccountSettings(
+                                theme = settings.theme.toAppTheme(),
+                                language = settings.language.toAppLanguage(),
+                                timeFormat = settings.timeFormat.toTimeFormat(),
+                                dateFormat = settings.dateFormat.toDateFormat(),
+                                marketingEmail = settings.marketingEmail ?: false,
+                            ))
+                        }.onFailure { it.handleIfSessionExpired() }
                     }
                 }
             }
@@ -286,6 +312,47 @@ class MainStoreFactory(
                 dispatch(Msg.SetUploadingProfileImage(false))
             }
         }
+
+        private fun updateAppearance(
+            theme: AppTheme = state().accountTheme,
+            language: AppLanguage = state().accountLanguage,
+            timeFormat: TimeFormat = state().accountTimeFormat,
+            dateFormat: DateFormat = state().accountDateFormat,
+        ) {
+            val accountId = state().accountId ?: return
+            dispatch(Msg.SetAccountSettings(
+                theme = theme, language = language,
+                timeFormat = timeFormat, dateFormat = dateFormat,
+                marketingEmail = state().accountMarketingEmail,
+            ))
+            scope.launch {
+                runCatching {
+                    preferenceRepository.updateAppearance(accountId, theme, language, timeFormat, dateFormat)
+                }.onFailure {
+                    if (it.handleIfSessionExpired()) return@launch
+                    dispatch(Msg.SetError("설정을 저장하지 못했습니다."))
+                }
+            }
+        }
+
+        private fun updateMarketingEmail(enabled: Boolean) {
+            val accountId = state().accountId ?: return
+            dispatch(Msg.SetAccountSettings(
+                theme = state().accountTheme,
+                language = state().accountLanguage,
+                timeFormat = state().accountTimeFormat,
+                dateFormat = state().accountDateFormat,
+                marketingEmail = enabled,
+            ))
+            scope.launch {
+                runCatching {
+                    preferenceRepository.updateMarketingEmail(accountId, enabled)
+                }.onFailure {
+                    if (it.handleIfSessionExpired()) return@launch
+                    dispatch(Msg.SetError("설정을 저장하지 못했습니다."))
+                }
+            }
+        }
     }
 
     private sealed interface Msg {
@@ -317,6 +384,14 @@ class MainStoreFactory(
         data class SetSettingsOpen(val isOpen: Boolean) : Msg
         data class SetUpdatingStatus(val isUpdating: Boolean) : Msg
         data class SetUploadingProfileImage(val isUploading: Boolean) : Msg
+        data class SetAccountSettings(
+            val theme: AppTheme,
+            val language: AppLanguage,
+            val timeFormat: TimeFormat,
+            val dateFormat: DateFormat,
+            val marketingEmail: Boolean,
+        ) : Msg
+        data class SetUpdatingSettings(val isUpdating: Boolean) : Msg
     }
 
     private object Reducer : com.arkivanov.mvikotlin.core.store.Reducer<State, Msg> {
@@ -387,6 +462,14 @@ class MainStoreFactory(
             is Msg.SetSettingsOpen -> copy(isSettingsOpen = msg.isOpen, isAccountMenuOpen = false)
             is Msg.SetUpdatingStatus -> copy(isUpdatingStatus = msg.isUpdating)
             is Msg.SetUploadingProfileImage -> copy(isUploadingProfileImage = msg.isUploading)
+            is Msg.SetAccountSettings -> copy(
+                accountTheme = msg.theme,
+                accountLanguage = msg.language,
+                accountTimeFormat = msg.timeFormat,
+                accountDateFormat = msg.dateFormat,
+                accountMarketingEmail = msg.marketingEmail,
+            )
+            is Msg.SetUpdatingSettings -> copy(isUpdatingSettings = msg.isUpdating)
         }
     }
 }

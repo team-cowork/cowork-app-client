@@ -13,7 +13,11 @@ import com.cowork.app_client.data.repository.ChatRepository
 import com.cowork.app_client.data.repository.PreferenceRepository
 import com.cowork.app_client.data.repository.TeamRepository
 import com.cowork.app_client.data.repository.UserRepository
+import com.cowork.app_client.domain.model.AppLanguage
+import com.cowork.app_client.domain.model.AppTheme
 import com.cowork.app_client.domain.model.ChannelType
+import com.cowork.app_client.domain.model.DateFormat
+import com.cowork.app_client.domain.model.TimeFormat
 import com.cowork.app_client.domain.model.UserStatus
 import com.cowork.app_client.feature.main.store.MainStore
 import com.cowork.app_client.feature.main.store.MainStoreFactory
@@ -89,4 +93,9 @@ class DefaultMainComponent(
     override fun onUploadProfileImage(bytes: ByteArray, contentType: String) =
         store.accept(MainStore.Intent.UploadProfileImage(bytes, contentType))
     override fun onReloadClick() = store.accept(MainStore.Intent.Reload)
+    override fun onThemeChange(theme: AppTheme) = store.accept(MainStore.Intent.UpdateTheme(theme))
+    override fun onLanguageChange(language: AppLanguage) = store.accept(MainStore.Intent.UpdateLanguage(language))
+    override fun onTimeFormatChange(timeFormat: TimeFormat) = store.accept(MainStore.Intent.UpdateTimeFormat(timeFormat))
+    override fun onDateFormatChange(dateFormat: DateFormat) = store.accept(MainStore.Intent.UpdateDateFormat(dateFormat))
+    override fun onMarketingEmailChange(enabled: Boolean) = store.accept(MainStore.Intent.UpdateMarketingEmail(enabled))
 }

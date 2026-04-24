@@ -1,7 +1,11 @@
 package com.cowork.app_client.feature.main.component
 
 import com.cowork.app_client.data.local.LayoutPreferenceStorage
+import com.cowork.app_client.domain.model.AppLanguage
+import com.cowork.app_client.domain.model.AppTheme
 import com.cowork.app_client.domain.model.ChannelType
+import com.cowork.app_client.domain.model.DateFormat
+import com.cowork.app_client.domain.model.TimeFormat
 import com.cowork.app_client.domain.model.UserStatus
 import com.cowork.app_client.feature.main.store.MainStore
 import kotlinx.coroutines.flow.StateFlow
@@ -32,4 +36,9 @@ interface MainComponent {
     fun onSignOutClick()
     fun onUploadProfileImage(bytes: ByteArray, contentType: String)
     fun onReloadClick()
+    fun onThemeChange(theme: AppTheme)
+    fun onLanguageChange(language: AppLanguage)
+    fun onTimeFormatChange(timeFormat: TimeFormat)
+    fun onDateFormatChange(dateFormat: DateFormat)
+    fun onMarketingEmailChange(enabled: Boolean)
 }

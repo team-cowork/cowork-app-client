@@ -1,10 +1,14 @@
 package com.cowork.app_client.feature.main.store
 
 import com.arkivanov.mvikotlin.core.store.Store
+import com.cowork.app_client.domain.model.AppLanguage
+import com.cowork.app_client.domain.model.AppTheme
 import com.cowork.app_client.domain.model.Channel
 import com.cowork.app_client.domain.model.ChannelType
 import com.cowork.app_client.domain.model.ChatMessage
+import com.cowork.app_client.domain.model.DateFormat
 import com.cowork.app_client.domain.model.TeamSummary
+import com.cowork.app_client.domain.model.TimeFormat
 import com.cowork.app_client.domain.model.UserStatus
 import com.cowork.app_client.feature.main.store.MainStore.Intent
 import com.cowork.app_client.feature.main.store.MainStore.Label
@@ -36,6 +40,11 @@ interface MainStore : Store<Intent, State, Label> {
         data class SetStatus(val status: UserStatus, val expiresInHours: Double?) : Intent
         data object SignOut : Intent
         data class UploadProfileImage(val bytes: ByteArray, val contentType: String) : Intent
+        data class UpdateTheme(val theme: AppTheme) : Intent
+        data class UpdateLanguage(val language: AppLanguage) : Intent
+        data class UpdateTimeFormat(val timeFormat: TimeFormat) : Intent
+        data class UpdateDateFormat(val dateFormat: DateFormat) : Intent
+        data class UpdateMarketingEmail(val enabled: Boolean) : Intent
     }
 
     data class State(
@@ -72,10 +81,16 @@ interface MainStore : Store<Intent, State, Label> {
         val accountDescription: String? = null,
         val accountRoles: List<String> = emptyList(),
         val accountStatus: UserStatus = UserStatus.Online,
+        val accountTheme: AppTheme = AppTheme.Dark,
+        val accountLanguage: AppLanguage = AppLanguage.Korean,
+        val accountTimeFormat: TimeFormat = TimeFormat.H24,
+        val accountDateFormat: DateFormat = DateFormat.YYYY_MM_DD,
+        val accountMarketingEmail: Boolean = false,
         val isAccountMenuOpen: Boolean = false,
         val isSettingsOpen: Boolean = false,
         val isUpdatingStatus: Boolean = false,
         val isUploadingProfileImage: Boolean = false,
+        val isUpdatingSettings: Boolean = false,
     ) {
         val selectedTeam: TeamSummary?
             get() = teams.firstOrNull { it.id == selectedTeamId }
