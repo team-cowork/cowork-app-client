@@ -336,7 +336,7 @@ private fun TeamAvatar(
 
     Box(
         modifier = Modifier
-            .size(48.dp)
+            .size(36.dp)
             .clip(CircleShape)
             .background(background)
             .clickable(onClick = onClick),
@@ -345,7 +345,7 @@ private fun TeamAvatar(
         Text(
             text = team.name.firstOrNull()?.uppercase() ?: "?",
             color = foreground,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
         )
     }
