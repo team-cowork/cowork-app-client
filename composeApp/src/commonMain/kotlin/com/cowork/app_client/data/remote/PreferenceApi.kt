@@ -23,26 +23,33 @@ class PreferenceApi(
     suspend fun updateAccountSettings(
         accessToken: String,
         accountId: Long,
-        status: String,
-        statusExpiresAt: String?,
+        request: UpdateAccountSettingsRequest,
     ): AccountSettings =
         client.put("$baseUrl/preferences/account/$accountId") {
             bearerAuth(accessToken)
             contentType(ContentType.Application.Json)
-            setBody(UpdateAccountSettingsRequest(status = status, statusExpiresAt = statusExpiresAt))
+            setBody(request)
         }.body<ApiResponse<AccountSettings>>().data ?: AccountSettings()
 
     @Serializable
     data class AccountSettings(
         val status: String? = null,
-        @SerialName("status_expires_at")
-        val statusExpiresAt: String? = null,
+        @SerialName("status_expires_at") val statusExpiresAt: String? = null,
+        @SerialName("marketing_email") val marketingEmail: Boolean? = null,
+        val theme: String? = null,
+        val language: String? = null,
+        @SerialName("time_format") val timeFormat: String? = null,
+        @SerialName("date_format") val dateFormat: String? = null,
     )
 
     @Serializable
-    private data class UpdateAccountSettingsRequest(
-        val status: String,
-        @SerialName("status_expires_at")
-        val statusExpiresAt: String?,
+    data class UpdateAccountSettingsRequest(
+        val status: String? = null,
+        @SerialName("status_expires_at") val statusExpiresAt: String? = null,
+        @SerialName("marketing_email") val marketingEmail: Boolean? = null,
+        val theme: String? = null,
+        val language: String? = null,
+        @SerialName("time_format") val timeFormat: String? = null,
+        @SerialName("date_format") val dateFormat: String? = null,
     )
 }
