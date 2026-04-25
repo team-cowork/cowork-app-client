@@ -3,6 +3,7 @@ package com.cowork.app_client.data.network
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.request.get
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
 class ConnectivityMonitor(
     private val httpClient: HttpClient,
@@ -51,7 +54,7 @@ class ConnectivityMonitor(
     // 카운트다운(1초 tick)과 헬스체크(BACKOFF_POLL_MS 간격)를 별도 코루틴으로 분리
     // → 헬스체크 지연 시간이 카운트다운 정확도에 영향을 주지 않음
     private suspend fun waitWithEarlyRecovery(backoffMs: Long): Boolean {
-        val endTimeMs = System.currentTimeMillis() + backoffMs
+        val deadline = TimeSource.Monotonic.markNow() + backoffMs.milliseconds
         val recovered = MutableStateFlow(false)
 
         val healthJob = scope.launch {
@@ -69,8 +72,8 @@ class ConnectivityMonitor(
 
         try {
             while (!recovered.value) {
-                val remainingMs = endTimeMs - System.currentTimeMillis()
-                if (remainingMs <= 0) break
+                val remainingMs = (-deadline.elapsedNow()).inWholeMilliseconds.coerceAtLeast(0L)
+                if (remainingMs <= 0L) break
                 _retryIn.value = ((remainingMs + 999L) / 1_000L).coerceAtLeast(1L)
                 delay(1_000L)
             }
@@ -96,11 +99,14 @@ class ConnectivityMonitor(
     }
 
     // 5xx는 서버 오류이므로 연결 불가로 판단, 4xx는 게이트웨이가 살아있으므로 연결 가능
+    // CancellationException은 협력적 취소를 위해 반드시 재던짐
     private suspend fun checkHealth(): Boolean = try {
         val response = httpClient.get(healthUrl)
         response.status.value < 500
     } catch (_: ClientRequestException) {
         true
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {
         false
     }

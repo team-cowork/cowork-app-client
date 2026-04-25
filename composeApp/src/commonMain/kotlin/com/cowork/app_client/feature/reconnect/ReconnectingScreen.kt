@@ -43,10 +43,20 @@ import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.jetbrains.compose.resources.painterResource
 
 // facts = ["...", "...", ...] 형태의 TOML 배열을 파싱
-private fun parseTomlStringList(content: String): List<String> =
-    Regex(""""((?:[^"\\]|\\.)*)"""").findAll(content)
+// - 입력 크기 상한으로 이상 파일 차단
+// - 수량자 바운딩({0,500})으로 백트래킹 범위 제한
+private fun parseTomlStringList(content: String): List<String> {
+    if (content.length > MAX_TOML_BYTES) return emptyList()
+    return Regex(""""([^"\\]{0,500}(?:\\.[^"\\]{0,500})*)"""")
+        .findAll(content)
         .map { it.groupValues[1] }
+        .filter { it.isNotBlank() }
+        .take(MAX_FACTS)
         .toList()
+}
+
+private const val MAX_TOML_BYTES = 16_000
+private const val MAX_FACTS = 100
 
 @OptIn(ExperimentalResourceApi::class)
 @Composable
