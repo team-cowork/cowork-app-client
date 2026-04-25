@@ -41,6 +41,7 @@ import coworkappclient.composeapp.generated.resources.logo_cowork
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.jetbrains.compose.resources.painterResource
+import kotlin.random.Random
 
 // facts = ["...", "...", ...] 형태의 TOML 배열을 파싱
 // - 입력 크기 상한으로 이상 파일 차단
@@ -55,20 +56,36 @@ private fun parseTomlStringList(content: String): List<String> {
         .toList()
 }
 
+// 극히 낮은 확률(1/CURSED_ODDS)로 등장하는 지독한 문장들
+private val cursedFacts = listOf(
+    "솔직히 이메일로 다 됩니다.",
+    "서버 담당자는 아마 지금 자고 있을 겁니다.",
+    "지금 이 순간에도 마감은 1초씩 다가오고 있어요.",
+    "재밌는 사실: 이 화면을 보는 건 당신 잘못이 아닙니다. 아마도.",
+    "서버가 응답하지 않는 건 당신을 싫어해서가 아닙니다. 그냥 죽은 겁니다.",
+    "cowork 없이도 구글 드라이브는 잘 됩니다. 생각해보세요.",
+    "개발팀 누군가가 오늘 커밋을 push 했을 가능성이 있습니다.",
+)
+
 private const val MAX_TOML_BYTES = 16_000
 private const val MAX_FACTS = 100
+private const val CURSED_ODDS = 150 // 약 0.67% 확률
 
 @OptIn(ExperimentalResourceApi::class)
 @Composable
 fun ReconnectingScreen(retryIn: Long) {
     var facts by remember { mutableStateOf(emptyList<String>()) }
     var factIndex by remember { mutableIntStateOf(0) }
+    // AnimatedContent의 키 — factIndex와 cursed 여부를 하나의 정수로 구분
+    var factTick by remember { mutableIntStateOf(0) }
+    var displayFact by remember { mutableStateOf("") }
     var dotCount by remember { mutableStateOf(1) }
 
     LaunchedEffect(Unit) {
         try {
             val content = Res.readBytes("files/cowork_facts.toml").decodeToString()
             facts = parseTomlStringList(content)
+            if (facts.isNotEmpty()) displayFact = facts[0]
         } catch (_: Exception) {
             // 파싱 실패 시 빈 리스트 유지
         }
@@ -78,7 +95,15 @@ fun ReconnectingScreen(retryIn: Long) {
         while (true) {
             delay(6_000L)
             if (facts.isNotEmpty()) {
-                factIndex = (factIndex + 1) % facts.size
+                // 1/CURSED_ODDS 확률로 저주받은 문장 삽입, 아니면 순서대로 순환
+                val next = if (Random.nextInt(CURSED_ODDS) == 0) {
+                    cursedFacts.random()
+                } else {
+                    factIndex = (factIndex + 1) % facts.size
+                    facts[factIndex]
+                }
+                displayFact = next
+                factTick++
             }
         }
     }
@@ -141,9 +166,9 @@ fun ReconnectingScreen(retryIn: Long) {
 
             Spacer(Modifier.height(20.dp))
 
-            if (facts.isNotEmpty()) {
+            if (displayFact.isNotEmpty()) {
                 AnimatedContent(
-                    targetState = factIndex,
+                    targetState = factTick,
                     transitionSpec = {
                         (fadeIn(tween(500)) + slideInVertically(tween(400)) { it / 4 }) togetherWith
                         (fadeOut(tween(300)) + slideOutVertically(tween(300)) { -it / 4 })
@@ -153,9 +178,9 @@ fun ReconnectingScreen(retryIn: Long) {
                         .heightIn(min = 36.dp),
                     contentAlignment = Alignment.Center,
                     label = "factSlide",
-                ) { idx ->
+                ) {
                     Text(
-                        text = facts[idx],
+                        text = displayFact,
                         fontSize = 12.sp,
                         color = Color(0xFF6D7176),
                         textAlign = TextAlign.Center,
