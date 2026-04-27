@@ -1,5 +1,4 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 val coworkAppVersion = providers.gradleProperty("coworkAppVersion")
     .orElse("1.0.0")
@@ -7,39 +6,21 @@ val coworkAppVersion = providers.gradleProperty("coworkAppVersion")
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.composeHotReload)
     alias(libs.plugins.kotlinSerialization)
 }
 
+compose.resources {
+    publicResClass = true
+    packageOfResClass = "com.cowork.desktop.client"
+}
+
 kotlin {
-    androidTarget {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_11)
-        }
-    }
-
-    listOf(
-        iosArm64(),
-        iosSimulatorArm64()
-    ).forEach { iosTarget ->
-        iosTarget.binaries.framework {
-            baseName = "ComposeApp"
-            isStatic = true
-        }
-    }
-
     jvm()
 
     sourceSets {
-        androidMain.dependencies {
-            implementation(libs.compose.uiToolingPreview)
-            implementation(libs.androidx.activity.compose)
-            implementation(libs.koin.android)
-            implementation(libs.ktor.clientOkhttp)
-        }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
@@ -74,13 +55,9 @@ kotlin {
             // Kotlinx
             implementation(libs.kotlinx.serializationJson)
             implementation(libs.kotlinx.coroutinesCore)
-
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
-        }
-        iosMain.dependencies {
-            implementation(libs.ktor.clientDarwin)
         }
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
@@ -90,40 +67,9 @@ kotlin {
     }
 }
 
-android {
-    namespace = "com.cowork.app_client"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
-
-    defaultConfig {
-        applicationId = "com.cowork.app_client"
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = coworkAppVersion
-    }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
-    buildTypes {
-        getByName("release") {
-            isMinifyEnabled = false
-        }
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-}
-
-dependencies {
-    debugImplementation(libs.compose.uiTooling)
-}
-
 compose.desktop {
     application {
-        mainClass = "com.cowork.app_client.MainKt"
+        mainClass = "com.cowork.desktop.client.MainKt"
 
         jvmArgs("-Xdock:icon=${project.file("icons/AppIcon.icns").absolutePath}")
 
@@ -134,7 +80,7 @@ compose.desktop {
 
             macOS {
                 iconFile.set(project.file("icons/AppIcon.icns"))
-                bundleID = "com.cowork.appclient"
+                bundleID = "com.cowork.desktop.client"
                 infoPlist {
                     extraKeysRawXml = """
                         <key>CFBundleURLTypes</key>

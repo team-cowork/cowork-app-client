@@ -1,0 +1,111 @@
+package com.cowork.desktop.client.feature.main.store
+
+import com.arkivanov.mvikotlin.core.store.Store
+import com.cowork.desktop.client.domain.model.AppLanguage
+import com.cowork.desktop.client.domain.model.AppTheme
+import com.cowork.desktop.client.domain.model.Channel
+import com.cowork.desktop.client.domain.model.ChannelType
+import com.cowork.desktop.client.domain.model.ChatMessage
+import com.cowork.desktop.client.domain.model.DateFormat
+import com.cowork.desktop.client.domain.model.TeamSummary
+import com.cowork.desktop.client.domain.model.TimeFormat
+import com.cowork.desktop.client.domain.model.UserStatus
+import com.cowork.desktop.client.feature.main.store.MainStore.Intent
+import com.cowork.desktop.client.feature.main.store.MainStore.Label
+import com.cowork.desktop.client.feature.main.store.MainStore.State
+
+interface MainStore : Store<Intent, State, Label> {
+
+    sealed interface Intent {
+        data object Reload : Intent
+        data class SelectTeam(val teamId: Long) : Intent
+        data class SelectChannel(val channelId: Long) : Intent
+        data object OpenCreateTeam : Intent
+        data object CloseCreateTeam : Intent
+        data class ChangeCreateTeamName(val name: String) : Intent
+        data class ChangeCreateTeamDescription(val description: String) : Intent
+        data class SetCreateTeamIcon(val bytes: ByteArray, val contentType: String) : Intent
+        data object SubmitCreateTeam : Intent
+        data object OpenCreateChannel : Intent
+        data object CloseCreateChannel : Intent
+        data class ChangeCreateChannelName(val name: String) : Intent
+        data class ChangeCreateChannelNotice(val notice: String) : Intent
+        data class ChangeCreateChannelType(val type: ChannelType) : Intent
+        data object SubmitCreateChannel : Intent
+        data object OpenAccountMenu : Intent
+        data object ToggleAccountMenu : Intent
+        data object CloseAccountMenu : Intent
+        data object OpenSettings : Intent
+        data object CloseSettings : Intent
+        data class SetStatus(val status: UserStatus, val expiresInHours: Double?) : Intent
+        data object SignOut : Intent
+        data class UploadProfileImage(val bytes: ByteArray, val contentType: String) : Intent
+        data class UpdateTheme(val theme: AppTheme) : Intent
+        data class UpdateLanguage(val language: AppLanguage) : Intent
+        data class UpdateTimeFormat(val timeFormat: TimeFormat) : Intent
+        data class UpdateDateFormat(val dateFormat: DateFormat) : Intent
+        data class UpdateMarketingEmail(val enabled: Boolean) : Intent
+    }
+
+    data class State(
+        val teams: List<TeamSummary> = emptyList(),
+        val selectedTeamId: Long? = null,
+        val channels: List<Channel> = emptyList(),
+        val selectedChannelId: Long? = null,
+        val messages: List<ChatMessage> = emptyList(),
+        val isLoadingTeams: Boolean = false,
+        val isLoadingChannels: Boolean = false,
+        val isLoadingMessages: Boolean = false,
+        val chatDraft: String = "",
+        val isCreateTeamOpen: Boolean = false,
+        val createTeamName: String = "",
+        val createTeamDescription: String = "",
+        val createTeamIconBytes: ByteArray? = null,
+        val createTeamIconContentType: String? = null,
+        val isCreatingTeam: Boolean = false,
+        val isCreateChannelOpen: Boolean = false,
+        val createChannelName: String = "",
+        val createChannelNotice: String = "",
+        val createChannelType: ChannelType = ChannelType.Text,
+        val isCreatingChannel: Boolean = false,
+        val error: String? = null,
+        val accountId: Long? = null,
+        val accountEmail: String? = null,
+        val accountName: String? = null,
+        val accountNickname: String? = null,
+        val accountProfileImageUrl: String? = null,
+        val accountGithub: String? = null,
+        val accountStudentNumber: String? = null,
+        val accountMajor: String? = null,
+        val accountStudentRole: String? = null,
+        val accountDescription: String? = null,
+        val accountRoles: List<String> = emptyList(),
+        val accountStatus: UserStatus = UserStatus.Online,
+        val accountTheme: AppTheme = AppTheme.Dark,
+        val accountLanguage: AppLanguage = AppLanguage.Korean,
+        val accountTimeFormat: TimeFormat = TimeFormat.H24,
+        val accountDateFormat: DateFormat = DateFormat.YYYY_MM_DD,
+        val accountMarketingEmail: Boolean = false,
+        val isAccountMenuOpen: Boolean = false,
+        val isSettingsOpen: Boolean = false,
+        val isUpdatingStatus: Boolean = false,
+        val isUploadingProfileImage: Boolean = false,
+        val isUpdatingSettings: Boolean = false,
+    ) {
+        val selectedTeam: TeamSummary?
+            get() = teams.firstOrNull { it.id == selectedTeamId }
+
+        val selectedChannel: Channel?
+            get() = channels.firstOrNull { it.id == selectedChannelId }
+
+        val canSubmitTeam: Boolean
+            get() = createTeamName.isNotBlank() && !isCreatingTeam
+
+        val canSubmitChannel: Boolean
+            get() = selectedTeamId != null && createChannelName.isNotBlank() && !isCreatingChannel
+    }
+
+    sealed interface Label {
+        data object SignedOut : Label
+    }
+}

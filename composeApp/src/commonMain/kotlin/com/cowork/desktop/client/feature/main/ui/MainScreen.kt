@@ -1,0 +1,2043 @@
+package com.cowork.desktop.client.feature.main.ui
+
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Article
+import androidx.compose.material.icons.automirrored.rounded.HelpOutline
+import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ChatBubble
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.window.Dialog
+import com.cowork.desktop.client.domain.model.AppLanguage
+import com.cowork.desktop.client.domain.model.AppTheme
+import com.cowork.desktop.client.domain.model.Channel
+import com.cowork.desktop.client.domain.model.ChannelType
+import com.cowork.desktop.client.domain.model.DateFormat
+import com.cowork.desktop.client.domain.model.TeamRole
+import com.cowork.desktop.client.domain.model.TeamSummary
+import com.cowork.desktop.client.domain.model.TimeFormat
+import com.cowork.desktop.client.domain.model.UserStatus
+import com.cowork.desktop.client.feature.main.component.MainComponent
+import com.cowork.desktop.client.feature.main.store.MainStore
+import com.cowork.desktop.client.ui.theme.coworkExtendedColors
+import com.cowork.desktop.client.util.decodeImageBitmap
+import com.cowork.desktop.client.util.horizontalResizeCursor
+import com.cowork.desktop.client.util.pickImageBytes
+import io.ktor.client.HttpClient
+import io.ktor.client.request.get
+import io.ktor.client.statement.readRawBytes
+import kotlinx.coroutines.launch
+import com.cowork.desktop.client.Res
+import com.cowork.desktop.client.logo_cowork
+import org.jetbrains.compose.resources.painterResource
+import org.koin.compose.koinInject
+
+// status colors resolved at composition time via coworkExtendedColors
+
+private val DndOptions = listOf(
+    "30분" to 0.5,
+    "1시간" to 1.0,
+    "2시간" to 2.0,
+    "4시간" to 4.0,
+    "해제 없음" to null,
+)
+
+@Composable
+fun MainScreen(component: MainComponent) {
+    val state by component.state.collectAsState()
+    val density = LocalDensity.current
+    var teamRailWidth by remember {
+        mutableStateOf(component.layoutPreferenceStorage.getTeamRailWidth()?.dp?.coerceIn(60.dp, 80.dp) ?: 68.dp)
+    }
+    var channelPaneWidth by remember {
+        mutableStateOf(component.layoutPreferenceStorage.getChannelPaneWidth()?.dp?.coerceIn(220.dp, 420.dp) ?: 280.dp)
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Row(modifier = Modifier.fillMaxSize()) {
+                TeamRail(
+                    state = state,
+                    width = teamRailWidth,
+                    onTeamClick = component::onTeamClick,
+                    onCreateTeamClick = component::onCreateTeamClick,
+                )
+
+                VerticalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.34f))
+
+                ChannelPane(
+                    state = state,
+                    width = channelPaneWidth,
+                    onChannelClick = component::onChannelClick,
+                    onCreateChannelClick = component::onCreateChannelClick,
+                    onAccountBarClick = component::onAccountMenuClick,
+                )
+
+                VerticalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))
+
+                WorkspacePane(state = state)
+            }
+
+            // 드래그 핸들을 Row 바깥에서 오버레이 — 1dp 시각 라인과 겹치도록 배치해 갭 없음
+            PanelDragHandle(
+                xOffset = teamRailWidth - 3.dp,
+                    onDrag = { delta ->
+                        teamRailWidth = with(density) {
+                            (teamRailWidth + delta.toDp()).coerceIn(60.dp, 80.dp)
+                        }
+                        component.layoutPreferenceStorage.saveTeamRailWidth(teamRailWidth.value)
+                    },
+                )
+            PanelDragHandle(
+                xOffset = teamRailWidth + 1.dp + channelPaneWidth - 3.dp,
+                    onDrag = { delta ->
+                        channelPaneWidth = with(density) {
+                            (channelPaneWidth + delta.toDp()).coerceIn(220.dp, 420.dp)
+                        }
+                        component.layoutPreferenceStorage.saveChannelPaneWidth(channelPaneWidth.value)
+                    },
+                )
+
+            if (state.isAccountMenuOpen) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = component::onAccountMenuDismiss,
+                        ),
+                )
+            }
+
+            AnimatedVisibility(
+                visible = state.isAccountMenuOpen,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = teamRailWidth + 2.dp, bottom = 64.dp)
+                    .width(436.dp),
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                AccountMenuCard(
+                    state = state,
+                    onSettingsClick = component::onSettingsClick,
+                    onStatusChange = component::onStatusChange,
+                    onSignOut = component::onSignOutClick,
+                    onUploadProfileImage = component::onUploadProfileImage,
+                )
+            }
+
+            if (state.isCreateTeamOpen) {
+                CreateTeamDialog(
+                    state = state,
+                    onDismiss = component::onCreateTeamDismiss,
+                    onNameChange = component::onCreateTeamNameChange,
+                    onDescriptionChange = component::onCreateTeamDescriptionChange,
+                    onIconChange = component::onCreateTeamIconChange,
+                    onSubmit = component::onCreateTeamSubmit,
+                )
+            }
+
+            if (state.isCreateChannelOpen) {
+                CreateChannelDialog(
+                    state = state,
+                    onDismiss = component::onCreateChannelDismiss,
+                    onNameChange = component::onCreateChannelNameChange,
+                    onNoticeChange = component::onCreateChannelNoticeChange,
+                    onTypeChange = component::onCreateChannelTypeChange,
+                    onSubmit = component::onCreateChannelSubmit,
+                )
+            }
+
+            if (state.isSettingsOpen) {
+                SettingsDialog(
+                    state = state,
+                    onDismiss = component::onSettingsDismiss,
+                    onThemeChange = component::onThemeChange,
+                    onLanguageChange = component::onLanguageChange,
+                    onTimeFormatChange = component::onTimeFormatChange,
+                    onDateFormatChange = component::onDateFormatChange,
+                    onMarketingEmailChange = component::onMarketingEmailChange,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TeamRail(
+    state: MainStore.State,
+    width: Dp,
+    onTeamClick: (Long) -> Unit,
+    onCreateTeamClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(width)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        CoworkLogoIcon()
+
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 10.dp))
+
+        if (state.isLoadingTeams) {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+        }
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(state.teams, key = { it.id }) { team ->
+                TeamAvatar(
+                    team = team,
+                    isSelected = team.id == state.selectedTeamId,
+                    onClick = { onTeamClick(team.id) },
+                )
+            }
+
+            item {
+                AddTeamButton(onClick = onCreateTeamClick)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddTeamButton(onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(if (isHovered) MaterialTheme.shapes.medium else CircleShape)
+            .background(
+                if (isHovered) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                else MaterialTheme.colorScheme.surfaceVariant
+            )
+            .hoverable(interactionSource)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Add,
+            contentDescription = "팀 추가",
+            modifier = Modifier.size(19.dp),
+            tint = Color(0xFF23A55A),
+        )
+    }
+}
+
+@Composable
+private fun CoworkLogoIcon() {
+    Image(
+        painter = painterResource(Res.drawable.logo_cowork),
+        contentDescription = "CoWork",
+        modifier = Modifier.size(36.dp),
+    )
+}
+
+@Composable
+private fun TeamAvatar(
+    team: TeamSummary,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    val background = if (isSelected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.primaryContainer
+    }
+    val foreground = if (isSelected) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    }
+
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(background)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = team.name.firstOrNull()?.uppercase() ?: "?",
+            color = foreground,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+// Row 바깥 Box 위에 absoluteOffset으로 올리는 투명 드래그 핸들.
+// 시각 라인(VerticalDivider)과 분리되어 있어 패널 배경색과 1dp 선 사이 갭이 없음.
+@Composable
+private fun PanelDragHandle(
+    xOffset: Dp,
+    onDrag: (Float) -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = Modifier
+            .absoluteOffset(x = xOffset)
+            .fillMaxHeight()
+            .width(6.dp)
+            .horizontalResizeCursor()
+            .hoverable(interactionSource)
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { _, dragAmount ->
+                    onDrag(dragAmount)
+                }
+            },
+    )
+}
+
+@Composable
+private fun ChannelPane(
+    state: MainStore.State,
+    width: Dp,
+    onChannelClick: (Long) -> Unit,
+    onCreateChannelClick: () -> Unit,
+    onAccountBarClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(width)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 64.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = state.selectedTeam?.name ?: "팀 없음",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = state.selectedTeam?.myRole?.label() ?: "팀을 생성하거나 초대받아 시작하세요",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+            }
+
+            if (state.error != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = state.error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
+            if (state.selectedTeamId != null) {
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "채널",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    TextButton(onClick = onCreateChannelClick) {
+                        Text("+")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            when {
+                state.selectedTeamId == null -> EmptyPaneText("왼쪽 + 버튼으로 팀을 생성하세요.")
+                state.isLoadingChannels -> Box(
+                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+                }
+                state.channels.isEmpty() -> EmptyPaneText("아직 채널이 없습니다.")
+                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(state.channels, key = { it.id }) { channel ->
+                        ChannelRow(
+                            channel = channel,
+                            isSelected = channel.id == state.selectedChannelId,
+                            onClick = { onChannelClick(channel.id) },
+                        )
+                    }
+                }
+            }
+        }
+
+        // 계정 바 (하단 고정)
+        AccountBar(
+            state = state,
+            modifier = Modifier.align(Alignment.BottomStart),
+            onClick = onAccountBarClick,
+        )
+    }
+}
+
+@Composable
+private fun AccountBar(
+    state: MainStore.State,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    // 팝업이 열려있거나 호버 중이면 @github 표시 (팝업 열릴 때 hover 해제로 인한 역방향 애니메이션 방지)
+    val showGithub = (isHovered || state.isAccountMenuOpen) && !state.accountGithub.isNullOrBlank()
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .background(
+                if (isHovered) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
+                else Color.Transparent
+            )
+            .hoverable(interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        ProfileAvatar(
+            imageUrl = state.accountProfileImageUrl,
+            fallback = state.accountInitial(),
+            size = 36.dp,
+            status = state.accountStatus,
+            ringColor = MaterialTheme.colorScheme.surface,
+        )
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = state.accountDisplayName(),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // 자기 공간 내에서 위로 슬라이드하며 텍스트 전환
+            AnimatedContent(
+                targetState = showGithub,
+                transitionSpec = {
+                    if (targetState) {
+                        // 호버 진입: 아래서 위로 올라옴
+                        (slideInVertically(tween(200)) { it } + fadeIn(tween(150))) togetherWith
+                        (slideOutVertically(tween(200)) { -it } + fadeOut(tween(120)))
+                    } else {
+                        // 호버 해제: 위에서 아래로 내려옴
+                        (slideInVertically(tween(200)) { -it } + fadeIn(tween(150))) togetherWith
+                        (slideOutVertically(tween(200)) { it } + fadeOut(tween(120)))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().clipToBounds(),
+                label = "subtitleSlide",
+            ) { showingGithub ->
+                Text(
+                    text = if (showingGithub) "@${state.accountGithub}" else state.accountStatus.label(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (showingGithub) MaterialTheme.colorScheme.primary else state.accountStatus.dotColor(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountMenuCard(
+    state: MainStore.State,
+    onSettingsClick: () -> Unit,
+    onStatusChange: (UserStatus, Double?) -> Unit,
+    onSignOut: () -> Unit,
+    onUploadProfileImage: (ByteArray, String) -> Unit,
+) {
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    var isDndSelectorOpen by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.width(436.dp)) {
+        Surface(
+            modifier = Modifier.width(280.dp).padding(8.dp),
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            border = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+            ),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+        ) {
+            Column {
+                Box(modifier = Modifier.fillMaxWidth().height(110.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(76.dp)
+                            .align(Alignment.TopStart)
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.primary,
+                                        MaterialTheme.colorScheme.secondary,
+                                    ),
+                                ),
+                            ),
+                    )
+
+                    ProfileAvatar(
+                        imageUrl = state.accountProfileImageUrl,
+                        fallback = state.accountInitial(),
+                        size = 68.dp,
+                        status = state.accountStatus,
+                        ringColor = MaterialTheme.colorScheme.surface,
+                        isUploading = state.isUploadingProfileImage,
+                        modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp),
+                        onEditClick = {
+                            coroutineScope.launch {
+                                val result = pickImageBytes()
+                                if (result != null) onUploadProfileImage(result.first, result.second)
+                            }
+                        },
+                    )
+
+                }
+
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Text(
+                        text = state.accountDisplayName(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+
+                    Text(
+                        text = state.accountEmail ?: "이메일 정보 없음",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+
+                    val hasStudentNumber = !state.accountStudentNumber.isNullOrBlank()
+                    val profileLine = listOfNotNull(
+                        state.accountStudentNumber?.takeIf { it.isNotBlank() },
+                        state.accountMajor?.takeIf { it.isNotBlank() },
+                        state.accountStudentRole?.takeIf { role ->
+                            role.isNotBlank() && (
+                                !hasStudentNumber ||
+                                !role.equals("GENERAL_STUDENT", ignoreCase = true)
+                            )
+                        },
+                    ).joinToString(" · ")
+
+                    if (profileLine.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = profileLine,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+
+                    state.accountGithub?.takeIf { it.isNotBlank() }?.let { github ->
+                        val uriHandler = LocalUriHandler.current
+                        val githubInteraction = remember { MutableInteractionSource() }
+                        val isGithubHovered by githubInteraction.collectIsHoveredAsState()
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "@$github",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                textDecoration = if (isGithubHovered) TextDecoration.Underline else TextDecoration.None,
+                            ),
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .hoverable(githubInteraction)
+                                .clickable(indication = null, interactionSource = githubInteraction) {
+                                    uriHandler.openUri("https://github.com/$github")
+                                },
+                        )
+                    }
+
+                    state.accountDescription?.takeIf { it.isNotBlank() }?.let { description ->
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider()
+
+                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
+                    Text(
+                        text = "상태",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                    )
+
+                    CompactStatusOption(
+                        label = "온라인",
+                        status = UserStatus.Online,
+                        currentStatus = state.accountStatus,
+                        isLoading = state.isUpdatingStatus,
+                        onSelect = {
+                            isDndSelectorOpen = false
+                            onStatusChange(UserStatus.Online, null)
+                        },
+                    )
+
+                    DndStatusOption(
+                        currentStatus = state.accountStatus,
+                        isLoading = state.isUpdatingStatus,
+                        isSelectorOpen = isDndSelectorOpen,
+                        onToggleSelector = {
+                            if (!state.isUpdatingStatus) {
+                                isDndSelectorOpen = !isDndSelectorOpen
+                            }
+                        },
+                    )
+                }
+
+                HorizontalDivider()
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable(onClick = onSignOut)
+                            .padding(horizontal = 6.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.Logout,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                        Text(
+                            text = "로그아웃",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    SettingsIconButton(onClick = onSettingsClick)
+                }
+            }
+        }
+
+        if (isDndSelectorOpen) {
+            DndExpiryFlyout(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 280.dp, bottom = 48.dp),
+                isLoading = state.isUpdatingStatus,
+                onSelect = { hours ->
+                    onStatusChange(UserStatus.DoNotDisturb, hours)
+                    isDndSelectorOpen = false
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileAvatar(
+    imageUrl: String?,
+    fallback: String,
+    size: Dp,
+    status: UserStatus?,
+    ringColor: Color,
+    modifier: Modifier = Modifier,
+    isUploading: Boolean = false,
+    onEditClick: (() -> Unit)? = null,
+) {
+    val httpClient = koinInject<HttpClient>()
+    val image = rememberRemoteImageBitmap(imageUrl, httpClient)
+    val dotOuterSize = if (size >= 60.dp) 18.dp else 12.dp
+    val dotInnerSize = if (size >= 60.dp) 12.dp else 8.dp
+
+    val editInteraction = remember { MutableInteractionSource() }
+    val isHovered by editInteraction.collectIsHoveredAsState()
+
+    Box(modifier = modifier.size(size)) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(CircleShape),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer,
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (image != null) {
+                    Image(
+                        bitmap = image,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Text(
+                        text = fallback,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        style = if (size >= 60.dp) {
+                            MaterialTheme.typography.headlineSmall
+                        } else {
+                            MaterialTheme.typography.labelLarge
+                        },
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
+
+        // 편집 오버레이 (모달 아바타 전용)
+        if (onEditClick != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+                    .hoverable(editInteraction)
+                    .then(
+                        if (!isUploading) Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onEditClick,
+                        ) else Modifier
+                    )
+                    .background(
+                        when {
+                            isUploading -> Color.Black.copy(alpha = 0.45f)
+                            isHovered -> Color.Black.copy(alpha = 0.38f)
+                            else -> Color.Transparent
+                        }
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isUploading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(size * 0.36f),
+                        strokeWidth = 2.dp,
+                        color = Color.White,
+                    )
+                } else if (isHovered) {
+                    Text(
+                        text = "변경",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
+
+        if (status != null) {
+            Box(
+                modifier = Modifier
+                    .size(dotOuterSize)
+                    .clip(CircleShape)
+                    .background(ringColor)
+                    .align(Alignment.BottomEnd),
+                contentAlignment = Alignment.Center,
+            ) {
+                StatusGlyph(status = status, size = dotInnerSize)
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberRemoteImageBitmap(imageUrl: String?, httpClient: HttpClient): ImageBitmap? {
+    val imageState = produceState<ImageBitmap?>(initialValue = null, key1 = imageUrl) {
+        value = null
+        val url = imageUrl?.takeIf { it.isNotBlank() } ?: return@produceState
+        value = runCatching {
+            decodeImageBitmap(httpClient.get(url).readRawBytes())
+        }.getOrNull()
+    }
+    return imageState.value
+}
+
+@Composable
+private fun SettingsIconButton(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = modifier
+            .size(24.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(
+                if (isHovered) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                else Color.Transparent,
+            )
+            .hoverable(interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        SettingsIcon(
+            color = if (isHovered) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+    }
+}
+
+@Composable
+private fun SettingsIcon(
+    color: Color,
+    modifier: Modifier = Modifier.size(15.dp),
+) {
+    Icon(
+        imageVector = Icons.Rounded.Settings,
+        contentDescription = null,
+        modifier = modifier,
+        tint = color,
+    )
+}
+
+@Composable
+private fun CompactStatusOption(
+    label: String,
+    status: UserStatus,
+    currentStatus: UserStatus,
+    isLoading: Boolean,
+    onSelect: () -> Unit,
+) {
+    val isSelected = currentStatus == status
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .then(if (!isLoading) Modifier.clickable(onClick = onSelect) else Modifier)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        StatusGlyph(status = status)
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+        )
+    }
+}
+
+@Composable
+private fun DndStatusOption(
+    currentStatus: UserStatus,
+    isLoading: Boolean,
+    isSelectorOpen: Boolean,
+    onToggleSelector: () -> Unit,
+) {
+    val isSelected = currentStatus == UserStatus.DoNotDisturb
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .then(if (!isLoading) Modifier.clickable(onClick = onToggleSelector) else Modifier)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        StatusGlyph(status = UserStatus.DoNotDisturb)
+        Text(
+            text = "방해금지",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+
+        ChevronRight(
+            color = if (isSelectorOpen) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+    }
+}
+
+@Composable
+private fun DndExpiryFlyout(
+    modifier: Modifier = Modifier,
+    isLoading: Boolean,
+    onSelect: (Double?) -> Unit,
+) {
+    Surface(
+        modifier = modifier.width(142.dp),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.24f),
+        ),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Column(modifier = Modifier.padding(6.dp)) {
+            Text(
+                text = "방해금지 시간",
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+            )
+
+            DndOptions.forEach { (labelText, hours) ->
+                DndExpiryOption(
+                    label = labelText,
+                    enabled = !isLoading,
+                    onClick = { onSelect(hours) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DndExpiryOption(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    val optionBackground = when {
+        !enabled -> Color.Transparent
+        isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+        else -> Color.Transparent
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .background(optionBackground)
+            .then(
+                if (enabled) {
+                    Modifier
+                        .hoverable(interactionSource)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = onClick,
+                        )
+                } else {
+                    Modifier
+                },
+            )
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (enabled) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f)
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun StatusGlyph(
+    status: UserStatus,
+    size: Dp = 12.dp,
+) {
+    val color = status.dotColor()
+
+    Canvas(modifier = Modifier.size(size)) {
+        when (status) {
+            UserStatus.Online -> drawCircle(color = color, radius = this.size.minDimension / 2f)
+            UserStatus.DoNotDisturb -> {
+                drawCircle(color = color, radius = this.size.minDimension / 2f)
+                drawLine(
+                    color = Color.White,
+                    start = Offset(this.size.width * 0.28f, this.size.height * 0.5f),
+                    end = Offset(this.size.width * 0.72f, this.size.height * 0.5f),
+                    strokeWidth = (1.8f * (size / 12.dp)).dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChevronRight(color: Color) {
+    Icon(
+        imageVector = Icons.Rounded.ChevronRight,
+        contentDescription = null,
+        modifier = Modifier.size(16.dp),
+        tint = color,
+    )
+}
+
+@Composable
+private fun ChannelRow(
+    channel: Channel,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(
+                if (isSelected) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                }
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            imageVector = channel.type.icon(),
+            contentDescription = channel.type.label(),
+            modifier = Modifier.size(17.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = channel.name,
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun WorkspacePane(state: MainStore.State) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+    ) {
+        Text(
+            text = state.selectedChannel?.name ?: state.selectedTeam?.name ?: "팀을 선택하세요",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = state.selectedChannel?.let { channel ->
+                "${channel.type.label()} 채널입니다. 채팅/음성/웹훅 작업 영역이 이 패널에 이어서 구현됩니다."
+            } ?: "채팅, 이슈, 음성채팅 작업 영역이 이 패널에 이어서 구현됩니다.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        state.selectedChannel?.notice?.takeIf { it.isNotBlank() }?.let { notice ->
+            Spacer(modifier = Modifier.height(24.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text(
+                    text = notice,
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+
+        if (state.selectedChannel?.type == ChannelType.Text) {
+            Spacer(modifier = Modifier.height(32.dp))
+            Text(
+                text = "메시지",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            when {
+                state.isLoadingMessages -> CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 2.dp,
+                )
+                state.messages.isEmpty() -> EmptyPaneText(
+                    "메시지 조회 API가 연결되면 최근 메시지가 표시됩니다.",
+                )
+                else -> LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(state.messages, key = { it.id }) { message ->
+                        MessageRow(message = message)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(
+                value = "",
+                onValueChange = {},
+                modifier = Modifier.fillMaxWidth(),
+                enabled = false,
+                placeholder = { Text("Socket.io JWT 인증 연결 후 메시지 전송 활성화") },
+                singleLine = true,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MessageRow(message: com.cowork.desktop.client.domain.model.ChatMessage) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(12.dp),
+    ) {
+        Text(
+            text = "user ${message.authorId}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = message.content,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun EmptyPaneText(text: String) {
+    Text(
+        text = text,
+        modifier = Modifier.padding(top = 16.dp),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+private enum class SettingsCategory(val label: String, val icon: ImageVector) {
+    Appearance("외관", Icons.Rounded.Tune),
+    Account("내 계정", Icons.Rounded.Person),
+}
+
+@Composable
+private fun SettingsDialog(
+    state: MainStore.State,
+    onDismiss: () -> Unit,
+    onThemeChange: (AppTheme) -> Unit,
+    onLanguageChange: (AppLanguage) -> Unit,
+    onTimeFormatChange: (TimeFormat) -> Unit,
+    onDateFormatChange: (DateFormat) -> Unit,
+    onMarketingEmailChange: (Boolean) -> Unit,
+) {
+    var selectedCategory by remember { mutableStateOf(SettingsCategory.Appearance) }
+
+    CoworkDialog(onDismissRequest = onDismiss) {
+        Row(modifier = Modifier.width(620.dp).height(440.dp)) {
+            // 왼쪽 카테고리 네비게이션
+            Column(
+                modifier = Modifier
+                    .width(168.dp)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                    .padding(vertical = 12.dp, horizontal = 8.dp),
+            ) {
+                Text(
+                    text = state.accountDisplayName(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsCategory.entries.forEach { category ->
+                    val isSelected = selectedCategory == category
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
+                            .background(
+                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                else Color.Transparent
+                            )
+                            .clickable { selectedCategory = category }
+                            .padding(horizontal = 8.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = category.icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp),
+                            tint = if (isSelected) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = category.label,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            VerticalDivider()
+
+            // 오른쪽 콘텐츠 패널
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = selectedCategory.label,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "닫기",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                HorizontalDivider()
+                when (selectedCategory) {
+                    SettingsCategory.Appearance -> AppearanceSettingsPanel(
+                        state = state,
+                        onThemeChange = onThemeChange,
+                        onLanguageChange = onLanguageChange,
+                        onTimeFormatChange = onTimeFormatChange,
+                        onDateFormatChange = onDateFormatChange,
+                    )
+                    SettingsCategory.Account -> AccountSettingsPanel(
+                        state = state,
+                        onMarketingEmailChange = onMarketingEmailChange,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppearanceSettingsPanel(
+    state: MainStore.State,
+    onThemeChange: (AppTheme) -> Unit,
+    onLanguageChange: (AppLanguage) -> Unit,
+    onTimeFormatChange: (TimeFormat) -> Unit,
+    onDateFormatChange: (DateFormat) -> Unit,
+) {
+    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp).verticalScroll(rememberScrollState())) {
+        SettingsGroupLabel("표시")
+        SettingsRow(label = "테마") {
+            SegmentedSelector(
+                options = AppTheme.entries,
+                selected = state.accountTheme,
+                label = { it.label },
+                onSelect = onThemeChange,
+            )
+        }
+        SettingsDivider()
+        SettingsRow(label = "언어") {
+            SegmentedSelector(
+                options = AppLanguage.entries,
+                selected = state.accountLanguage,
+                label = { it.label },
+                onSelect = onLanguageChange,
+            )
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+        SettingsGroupLabel("날짜 및 시간")
+        SettingsRow(label = "시간 형식") {
+            SegmentedSelector(
+                options = TimeFormat.entries,
+                selected = state.accountTimeFormat,
+                label = { it.label },
+                onSelect = onTimeFormatChange,
+            )
+        }
+        SettingsDivider()
+        SettingsRow(label = "날짜 형식") {
+            SettingsDropdown(
+                options = DateFormat.entries,
+                selected = state.accountDateFormat,
+                label = { it.label },
+                onSelect = onDateFormatChange,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AccountSettingsPanel(
+    state: MainStore.State,
+    onMarketingEmailChange: (Boolean) -> Unit,
+) {
+    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        SettingsGroupLabel("이메일")
+        SettingsRow(label = "마케팅 이메일 수신") {
+            Switch(
+                checked = state.accountMarketingEmail,
+                onCheckedChange = onMarketingEmailChange,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsGroupLabel(text: String) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+        letterSpacing = 0.8.sp,
+        modifier = Modifier.padding(bottom = 8.dp),
+    )
+}
+
+@Composable
+private fun SettingsRow(label: String, content: @Composable () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        content()
+    }
+}
+
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+}
+
+@Composable
+private fun <T> SegmentedSelector(
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.small)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), MaterialTheme.shapes.small),
+    ) {
+        options.forEachIndexed { index, option ->
+            val isSelected = option == selected
+            Box(
+                modifier = Modifier
+                    .background(
+                        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                        else Color.Transparent
+                    )
+                    .clickable { onSelect(option) }
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = label(option),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (index < options.lastIndex) {
+                VerticalDivider(
+                    modifier = Modifier.height(32.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun <T> SettingsDropdown(
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            modifier = Modifier
+                .clip(MaterialTheme.shapes.small)
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), MaterialTheme.shapes.small)
+                .clickable { expanded = true }
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = label(selected),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Icon(
+                imageVector = Icons.Rounded.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier.size(15.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = label(option),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (option == selected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (option == selected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface,
+                        )
+                    },
+                    onClick = { onSelect(option); expanded = false },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreateTeamDialog(
+    state: MainStore.State,
+    onDismiss: () -> Unit,
+    onNameChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onIconChange: (ByteArray, String) -> Unit,
+    onSubmit: () -> Unit,
+) {
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    val iconBytes = state.createTeamIconBytes
+    val iconBitmap = remember(iconBytes) { iconBytes?.let { decodeImageBitmap(it) } }
+
+    CoworkDialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier.width(440.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            CoworkDialogHeader(
+                title = "새 팀 만들기",
+                subtitle = "팀 아이콘과 이름을 설정하세요.",
+                onDismiss = onDismiss,
+            )
+
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // 팀 아이콘 업로드
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(MaterialTheme.shapes.extraLarge)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable {
+                            coroutineScope.launch {
+                                val result = pickImageBytes()
+                                if (result != null) onIconChange(result.first, result.second)
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (iconBitmap != null) {
+                        Image(
+                            bitmap = iconBitmap,
+                            contentDescription = "팀 아이콘",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.35f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = Color.White,
+                            )
+                        }
+                    } else {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Rounded.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "아이콘",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    DialogFieldLabel("팀 이름")
+                    Spacer(modifier = Modifier.height(6.dp))
+                    DialogTextField(
+                        value = state.createTeamName,
+                        onValueChange = onNameChange,
+                        placeholder = "예: 백엔드팀",
+                        singleLine = true,
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    DialogFieldLabel("설명 (선택)")
+                    Spacer(modifier = Modifier.height(6.dp))
+                    DialogTextField(
+                        value = state.createTeamDescription,
+                        onValueChange = onDescriptionChange,
+                        placeholder = "팀에 대한 간단한 설명",
+                        minLines = 3,
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    DialogSubmitButton(
+                        label = "팀 만들기",
+                        enabled = state.canSubmitTeam,
+                        isLoading = state.isCreatingTeam,
+                        onClick = onSubmit,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreateChannelDialog(
+    state: MainStore.State,
+    onDismiss: () -> Unit,
+    onNameChange: (String) -> Unit,
+    onNoticeChange: (String) -> Unit,
+    onTypeChange: (ChannelType) -> Unit,
+    onSubmit: () -> Unit,
+) {
+    CoworkDialog(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.width(440.dp)) {
+            CoworkDialogHeader(
+                title = "새 채널 만들기",
+                subtitle = "채널 유형을 선택하고 이름을 지정하세요.",
+                onDismiss = onDismiss,
+            )
+
+            Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
+                DialogFieldLabel("채널 유형")
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        ChannelType.Text,
+                        ChannelType.Voice,
+                        ChannelType.Webhook,
+                        ChannelType.MeetingNote,
+                    ).forEach { type ->
+                        TypeButton(
+                            type = type,
+                            isSelected = type == state.createChannelType,
+                            onClick = { onTypeChange(type) },
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                DialogFieldLabel("채널 이름")
+                Spacer(modifier = Modifier.height(6.dp))
+                DialogTextField(
+                    value = state.createChannelName,
+                    onValueChange = onNameChange,
+                    placeholder = "예: 일반",
+                    singleLine = true,
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                DialogFieldLabel("공지 (선택)")
+                Spacer(modifier = Modifier.height(6.dp))
+                DialogTextField(
+                    value = state.createChannelNotice,
+                    onValueChange = onNoticeChange,
+                    placeholder = "채널 상단에 표시될 공지 내용",
+                    minLines = 3,
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                DialogSubmitButton(
+                    label = "채널 만들기",
+                    enabled = state.canSubmitChannel,
+                    isLoading = state.isCreatingChannel,
+                    onClick = onSubmit,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CoworkDialog(
+    onDismissRequest: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismissRequest) {
+        val visibleState = remember {
+            MutableTransitionState(false).apply { targetState = true }
+        }
+        AnimatedVisibility(
+            visibleState = visibleState,
+            enter = fadeIn(spring(stiffness = Spring.StiffnessMedium)) +
+                    scaleIn(spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow), initialScale = 0.90f),
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shadowElevation = 16.dp,
+                tonalElevation = 0.dp,
+                content = content,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CoworkDialogHeader(
+    title: String,
+    subtitle: String? = null,
+    onDismiss: () -> Unit,
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 16.dp, bottom = if (subtitle != null) 2.dp else 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (subtitle != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "닫기",
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant,
+            modifier = Modifier.padding(bottom = if (subtitle != null) 0.dp else 0.dp),
+        )
+    }
+}
+
+@Composable
+private fun DialogFieldLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun DialogSubmitButton(
+    label: String,
+    enabled: Boolean,
+    isLoading: Boolean,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth().height(44.dp),
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+        } else {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DialogTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    singleLine: Boolean = false,
+    minLines: Int = 1,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    val textColor = MaterialTheme.colorScheme.onSurface
+    val placeholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+    val bgColor = MaterialTheme.colorScheme.surfaceVariant
+    val borderColor = if (isFocused) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                      else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
+
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = singleLine,
+        minLines = minLines,
+        interactionSource = interactionSource,
+        textStyle = MaterialTheme.typography.bodyMedium.copy(color = textColor),
+        cursorBrush = Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary)),
+        modifier = Modifier.fillMaxWidth(),
+        decorationBox = { inner ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.small)
+                    .background(bgColor)
+                    .border(1.5.dp, borderColor, MaterialTheme.shapes.small)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+            ) {
+                if (value.isEmpty()) {
+                    Text(
+                        text = placeholder,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = placeholderColor,
+                    )
+                }
+                inner()
+            }
+        },
+    )
+}
+
+@Composable
+private fun TypeButton(
+    type: ChannelType,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    val background = if (isSelected) MaterialTheme.colorScheme.primary
+                     else MaterialTheme.colorScheme.surfaceVariant
+    val foreground = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                     else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Row(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.medium)
+            .background(background)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            imageVector = type.icon(),
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = foreground,
+        )
+        Text(
+            text = type.label(),
+            color = foreground,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+private fun MainStore.State.accountDisplayName(): String =
+    accountNickname?.takeIf { it.isNotBlank() }
+        ?: accountName?.takeIf { it.isNotBlank() }
+        ?: accountEmail?.takeIf { it.isNotBlank() }
+        ?: "내 계정"
+
+private fun MainStore.State.accountInitial(): String =
+    accountDisplayName().firstOrNull()?.uppercase() ?: "?"
+
+@Composable
+private fun UserStatus.dotColor(): Color {
+    val ext = coworkExtendedColors
+    return when (this) {
+        UserStatus.Online -> ext.statusOnline
+        UserStatus.DoNotDisturb -> ext.statusDnd
+    }
+}
+
+private fun UserStatus.label(): String = when (this) {
+    UserStatus.Online -> "온라인"
+    UserStatus.DoNotDisturb -> "방해금지"
+}
+
+private fun TeamRole.label(): String = when (this) {
+    TeamRole.Owner -> "OWNER"
+    TeamRole.Admin -> "ADMIN"
+    TeamRole.Member -> "MEMBER"
+    TeamRole.Unknown -> "UNKNOWN"
+}
+
+private fun ChannelType.icon(): ImageVector = when (this) {
+    ChannelType.Text -> Icons.Rounded.ChatBubble
+    ChannelType.Voice -> Icons.AutoMirrored.Rounded.VolumeUp
+    ChannelType.Webhook -> Icons.Rounded.Link
+    ChannelType.MeetingNote -> Icons.AutoMirrored.Rounded.Article
+    ChannelType.Unknown -> Icons.AutoMirrored.Rounded.HelpOutline
+}
+
+private fun ChannelType.label(): String = when (this) {
+    ChannelType.Text -> "텍스트"
+    ChannelType.Voice -> "음성"
+    ChannelType.Webhook -> "웹훅"
+    ChannelType.MeetingNote -> "회의록"
+    ChannelType.Unknown -> "알 수 없음"
+}
