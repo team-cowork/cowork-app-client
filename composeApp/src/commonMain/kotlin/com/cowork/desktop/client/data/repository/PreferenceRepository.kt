@@ -33,9 +33,11 @@ class DefaultPreferenceRepository(
         }.getOrDefault(UserStatus.Online)
 
     override suspend fun getAccountSettings(accountId: Long): PreferenceApi.AccountSettings =
-        authRepository.authorized { token ->
-            preferenceApi.getAccountSettings(token, accountId)
-        }
+        runCatching {
+            authRepository.authorized { token ->
+                preferenceApi.getAccountSettings(token, accountId)
+            }
+        }.getOrDefault(PreferenceApi.AccountSettings())
 
     override suspend fun updateAccountStatus(accountId: Long, status: UserStatus, expiresInHours: Double?) {
         val expiresAt = if (status == UserStatus.DoNotDisturb && expiresInHours != null) {

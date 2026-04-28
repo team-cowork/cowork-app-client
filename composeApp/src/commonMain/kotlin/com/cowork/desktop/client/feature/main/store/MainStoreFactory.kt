@@ -108,30 +108,25 @@ class MainStoreFactory(
                     val claims = parseJwtClaims(tokens.accessToken)
                     dispatch(Msg.SetAccountInfo(claims.accountId, claims.email))
                     if (claims.accountId != null) {
-                        runCatching {
-                            preferenceRepository.getAccountSettings(claims.accountId)
-                        }.onSuccess { settings ->
-                            dispatch(Msg.SetAccountStatus(
-                                when (settings.status?.uppercase()) {
-                                    "DO_NOT_DISTURB" -> UserStatus.DoNotDisturb
-                                    else -> UserStatus.Online
-                                }
-                            ))
-                            dispatch(Msg.SetAccountSettings(
-                                theme = settings.theme.toAppTheme(),
-                                language = settings.language.toAppLanguage(),
-                                timeFormat = settings.timeFormat.toTimeFormat(),
-                                dateFormat = settings.dateFormat.toDateFormat(),
-                                marketingEmail = settings.marketingEmail ?: false,
-                            ))
-                        }.onFailure { it.handleIfSessionExpired() }
+                        val settings = preferenceRepository.getAccountSettings(claims.accountId)
+                        dispatch(Msg.SetAccountStatus(
+                            when (settings.status?.uppercase()) {
+                                "DO_NOT_DISTURB" -> UserStatus.DoNotDisturb
+                                else -> UserStatus.Online
+                            }
+                        ))
+                        dispatch(Msg.SetAccountSettings(
+                            theme = settings.theme.toAppTheme(),
+                            language = settings.language.toAppLanguage(),
+                            timeFormat = settings.timeFormat.toTimeFormat(),
+                            dateFormat = settings.dateFormat.toDateFormat(),
+                            marketingEmail = settings.marketingEmail ?: false,
+                        ))
                     }
                 }
             }
             scope.launch {
-                val profile = runCatching { userRepository.getMyProfile() }
-                    .onFailure { it.handleIfSessionExpired() }
-                    .getOrNull()
+                val profile = userRepository.getMyProfile()
                 if (profile != null) {
                     dispatch(Msg.SetUserProfile(profile))
                 }
