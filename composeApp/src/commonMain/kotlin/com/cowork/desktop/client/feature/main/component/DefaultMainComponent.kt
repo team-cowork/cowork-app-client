@@ -11,7 +11,9 @@ import com.cowork.desktop.client.data.repository.AuthRepository
 import com.cowork.desktop.client.data.repository.ChannelRepository
 import com.cowork.desktop.client.data.repository.ChatRepository
 import com.cowork.desktop.client.data.repository.PreferenceRepository
+import com.cowork.desktop.client.data.repository.ProjectRepository
 import com.cowork.desktop.client.data.repository.TeamRepository
+import com.cowork.desktop.client.data.repository.ThreadRepository
 import com.cowork.desktop.client.data.repository.UserRepository
 import com.cowork.desktop.client.domain.model.AppLanguage
 import com.cowork.desktop.client.domain.model.AppTheme
@@ -38,6 +40,8 @@ class DefaultMainComponent(
     chatRepository: ChatRepository,
     preferenceRepository: PreferenceRepository,
     userRepository: UserRepository,
+    projectRepository: ProjectRepository,
+    threadRepository: ThreadRepository,
     override val layoutPreferenceStorage: LayoutPreferenceStorage,
     private val onSignedOut: () -> Unit,
 ) : MainComponent, ComponentContext by componentContext {
@@ -53,6 +57,8 @@ class DefaultMainComponent(
             chatRepository = chatRepository,
             preferenceRepository = preferenceRepository,
             userRepository = userRepository,
+            projectRepository = projectRepository,
+            threadRepository = threadRepository,
         ).create()
     }
 
@@ -81,9 +87,16 @@ class DefaultMainComponent(
     override fun onCreateChannelClick() = store.accept(MainStore.Intent.OpenCreateChannel)
     override fun onCreateChannelDismiss() = store.accept(MainStore.Intent.CloseCreateChannel)
     override fun onCreateChannelNameChange(name: String) = store.accept(MainStore.Intent.ChangeCreateChannelName(name))
-    override fun onCreateChannelNoticeChange(notice: String) = store.accept(MainStore.Intent.ChangeCreateChannelNotice(notice))
+    override fun onCreateChannelDescriptionChange(description: String) = store.accept(MainStore.Intent.ChangeCreateChannelDescription(description))
     override fun onCreateChannelTypeChange(type: ChannelType) = store.accept(MainStore.Intent.ChangeCreateChannelType(type))
+    override fun onCreateChannelPrivateChange(isPrivate: Boolean) = store.accept(MainStore.Intent.ChangeCreateChannelPrivate(isPrivate))
     override fun onCreateChannelSubmit() = store.accept(MainStore.Intent.SubmitCreateChannel)
+    override fun onProjectClick(projectId: Long) = store.accept(MainStore.Intent.SelectProject(projectId))
+    override fun onCreateProjectClick() = store.accept(MainStore.Intent.OpenCreateProject)
+    override fun onCreateProjectDismiss() = store.accept(MainStore.Intent.CloseCreateProject)
+    override fun onCreateProjectNameChange(name: String) = store.accept(MainStore.Intent.ChangeCreateProjectName(name))
+    override fun onCreateProjectDescriptionChange(description: String) = store.accept(MainStore.Intent.ChangeCreateProjectDescription(description))
+    override fun onCreateProjectSubmit() = store.accept(MainStore.Intent.SubmitCreateProject)
     override fun onAccountMenuClick() = store.accept(MainStore.Intent.ToggleAccountMenu)
     override fun onAccountMenuDismiss() = store.accept(MainStore.Intent.CloseAccountMenu)
     override fun onSettingsClick() = store.accept(MainStore.Intent.OpenSettings)

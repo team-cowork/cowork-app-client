@@ -8,8 +8,10 @@ import com.cowork.desktop.client.data.repository.AuthRepository
 import com.cowork.desktop.client.data.repository.ChannelRepository
 import com.cowork.desktop.client.data.repository.ChatRepository
 import com.cowork.desktop.client.data.repository.PreferenceRepository
+import com.cowork.desktop.client.data.repository.ProjectRepository
 import com.cowork.desktop.client.data.repository.SessionExpiredException
 import com.cowork.desktop.client.data.repository.TeamRepository
+import com.cowork.desktop.client.data.repository.ThreadRepository
 import com.cowork.desktop.client.data.repository.UserRepository
 import com.cowork.desktop.client.domain.model.AppLanguage
 import com.cowork.desktop.client.domain.model.AppTheme
@@ -17,7 +19,9 @@ import com.cowork.desktop.client.domain.model.Channel
 import com.cowork.desktop.client.domain.model.ChannelType
 import com.cowork.desktop.client.domain.model.ChatMessage
 import com.cowork.desktop.client.domain.model.DateFormat
+import com.cowork.desktop.client.domain.model.Project
 import com.cowork.desktop.client.domain.model.TeamSummary
+import com.cowork.desktop.client.domain.model.Thread
 import com.cowork.desktop.client.domain.model.TimeFormat
 import com.cowork.desktop.client.domain.model.UserStatus
 import com.cowork.desktop.client.domain.model.toAppLanguage
@@ -39,6 +43,8 @@ class MainStoreFactory(
     private val chatRepository: ChatRepository,
     private val preferenceRepository: PreferenceRepository,
     private val userRepository: UserRepository,
+    private val projectRepository: ProjectRepository,
+    private val threadRepository: ThreadRepository,
 ) {
     fun create(): MainStore =
         object : MainStore, Store<Intent, State, Label> by storeFactory.create(
@@ -75,9 +81,16 @@ class MainStoreFactory(
                 Intent.OpenCreateChannel -> dispatch(Msg.SetCreateChannelOpen(true))
                 Intent.CloseCreateChannel -> dispatch(Msg.ResetCreateChannelForm)
                 is Intent.ChangeCreateChannelName -> dispatch(Msg.SetCreateChannelName(intent.name))
-                is Intent.ChangeCreateChannelNotice -> dispatch(Msg.SetCreateChannelNotice(intent.notice))
+                is Intent.ChangeCreateChannelDescription -> dispatch(Msg.SetCreateChannelDescription(intent.description))
                 is Intent.ChangeCreateChannelType -> dispatch(Msg.SetCreateChannelType(intent.type))
+                is Intent.ChangeCreateChannelPrivate -> dispatch(Msg.SetCreateChannelPrivate(intent.isPrivate))
                 Intent.SubmitCreateChannel -> createChannel()
+                is Intent.SelectProject -> selectProject(intent.projectId)
+                Intent.OpenCreateProject -> dispatch(Msg.SetCreateProjectOpen(true))
+                Intent.CloseCreateProject -> dispatch(Msg.ResetCreateProjectForm)
+                is Intent.ChangeCreateProjectName -> dispatch(Msg.SetCreateProjectName(intent.name))
+                is Intent.ChangeCreateProjectDescription -> dispatch(Msg.SetCreateProjectDescription(intent.description))
+                Intent.SubmitCreateProject -> createProject()
                 Intent.OpenAccountMenu -> dispatch(Msg.SetAccountMenuOpen(true))
                 Intent.ToggleAccountMenu -> dispatch(Msg.SetAccountMenuOpen(!state().isAccountMenuOpen))
                 Intent.CloseAccountMenu -> dispatch(Msg.SetAccountMenuOpen(false))
@@ -94,7 +107,6 @@ class MainStoreFactory(
             }
         }
 
-        // SessionExpiredException이면 강제 로그아웃 Label을 발행하고 true를 반환
         private fun Throwable.handleIfSessionExpired(): Boolean {
             if (this !is SessionExpiredException) return false
             publish(Label.SignedOut)
@@ -148,6 +160,7 @@ class MainStoreFactory(
                         dispatch(Msg.SetTeams(teams, selectedTeamId))
                         if (selectedTeamId != null && selectedTeamId != currentSelectedTeamId) {
                             loadChannels(selectedTeamId)
+                            loadProjects(selectedTeamId)
                         }
                     }
                     .onFailure {
@@ -170,6 +183,7 @@ class MainStoreFactory(
         private fun selectTeam(teamId: Long) {
             dispatch(Msg.SelectTeam(teamId))
             loadChannels(teamId)
+            loadProjects(teamId)
         }
 
         private fun loadChannels(teamId: Long) {
@@ -181,6 +195,7 @@ class MainStoreFactory(
                         dispatch(Msg.SetChannels(channels, selectedChannelId))
                         if (selectedChannelId != null) {
                             loadMessages(selectedChannelId)
+                            loadThreads(selectedChannelId)
                         }
                     }
                     .onFailure {
@@ -191,9 +206,27 @@ class MainStoreFactory(
             }
         }
 
+        private fun loadProjects(teamId: Long) {
+            scope.launch {
+                dispatch(Msg.SetLoadingProjects(true))
+                runCatching { projectRepository.getTeamProjects(teamId) }
+                    .onSuccess { projects -> dispatch(Msg.SetProjects(projects)) }
+                    .onFailure {
+                        if (it.handleIfSessionExpired()) return@launch
+                        dispatch(Msg.SetProjects(emptyList()))
+                    }
+                dispatch(Msg.SetLoadingProjects(false))
+            }
+        }
+
         private fun selectChannel(channelId: Long) {
             dispatch(Msg.SelectChannel(channelId))
             loadMessages(channelId)
+            loadThreads(channelId)
+        }
+
+        private fun selectProject(projectId: Long) {
+            dispatch(Msg.SelectProject(projectId))
         }
 
         private fun loadMessages(channelId: Long) {
@@ -206,6 +239,19 @@ class MainStoreFactory(
                         dispatch(Msg.SetMessages(emptyList()))
                     }
                 dispatch(Msg.SetLoadingMessages(false))
+            }
+        }
+
+        private fun loadThreads(channelId: Long) {
+            scope.launch {
+                dispatch(Msg.SetLoadingThreads(true))
+                runCatching { threadRepository.getThreads(channelId) }
+                    .onSuccess { threads -> dispatch(Msg.SetThreads(threads)) }
+                    .onFailure {
+                        if (it.handleIfSessionExpired()) return@launch
+                        dispatch(Msg.SetThreads(emptyList()))
+                    }
+                dispatch(Msg.SetLoadingThreads(false))
             }
         }
 
@@ -237,8 +283,9 @@ class MainStoreFactory(
         private fun createChannel() {
             val teamId = state().selectedTeamId ?: return
             val name = state().createChannelName.trim()
-            val notice = state().createChannelNotice.trim().ifBlank { null }
+            val description = state().createChannelDescription.trim().ifBlank { null }
             val type = state().createChannelType
+            val isPrivate = state().createChannelIsPrivate
             if (name.isBlank() || state().isCreatingChannel) return
 
             scope.launch {
@@ -248,8 +295,8 @@ class MainStoreFactory(
                         teamId = teamId,
                         type = type,
                         name = name,
-                        notice = notice,
-                        projectId = null,
+                        description = description,
+                        isPrivate = isPrivate,
                     )
                 }.onSuccess { channel ->
                     dispatch(Msg.ResetCreateChannelForm)
@@ -257,8 +304,30 @@ class MainStoreFactory(
                     selectChannel(channel.id)
                 }.onFailure {
                     if (it.handleIfSessionExpired()) return@launch
-                    dispatch(Msg.SetError("채널을 생성하지 못했습니다. 서버의 cowork-channel API가 필요합니다."))
+                    dispatch(Msg.SetError("채널을 생성하지 못했습니다."))
                     dispatch(Msg.SetCreatingChannel(false))
+                }
+            }
+        }
+
+        private fun createProject() {
+            val teamId = state().selectedTeamId ?: return
+            val name = state().createProjectName.trim()
+            val description = state().createProjectDescription.trim().ifBlank { null }
+            if (name.isBlank() || state().isCreatingProject) return
+
+            scope.launch {
+                dispatch(Msg.SetCreatingProject(true))
+                runCatching {
+                    projectRepository.createProject(teamId = teamId, name = name, description = description)
+                }.onSuccess { project ->
+                    dispatch(Msg.ResetCreateProjectForm)
+                    loadProjects(project.teamId)
+                    dispatch(Msg.SelectProject(project.id))
+                }.onFailure {
+                    if (it.handleIfSessionExpired()) return@launch
+                    dispatch(Msg.SetError("프로젝트를 생성하지 못했습니다."))
+                    dispatch(Msg.SetCreatingProject(false))
                 }
             }
         }
@@ -293,16 +362,16 @@ class MainStoreFactory(
             scope.launch {
                 dispatch(Msg.SetUploadingProfileImage(true))
                 val result = runCatching { userRepository.uploadProfileImage(bytes, contentType) }
-                result.onFailure { if (it.handleIfSessionExpired()) return@launch }
-                val success = result.getOrDefault(false)
+                result.onFailure {
+                    if (it.handleIfSessionExpired()) return@launch
+                    dispatch(Msg.SetError(it.message ?: "프로필 사진을 업로드하지 못했습니다."))
+                }
 
-                if (success) {
+                if (result.isSuccess) {
                     val profile = runCatching { userRepository.getMyProfile() }
                         .onFailure { it.handleIfSessionExpired() }
                         .getOrNull()
                     if (profile != null) dispatch(Msg.SetUserProfile(profile))
-                } else {
-                    dispatch(Msg.SetError("프로필 사진을 업로드하지 못했습니다."))
                 }
                 dispatch(Msg.SetUploadingProfileImage(false))
             }
@@ -354,11 +423,16 @@ class MainStoreFactory(
         data class SetTeams(val teams: List<TeamSummary>, val selectedTeamId: Long?) : Msg
         data class SelectTeam(val teamId: Long) : Msg
         data class SelectChannel(val channelId: Long) : Msg
+        data class SelectProject(val projectId: Long) : Msg
         data class SetChannels(val channels: List<Channel>, val selectedChannelId: Long? = null) : Msg
         data class SetMessages(val messages: List<ChatMessage>) : Msg
+        data class SetThreads(val threads: List<Thread>) : Msg
+        data class SetProjects(val projects: List<Project>) : Msg
         data class SetLoadingTeams(val isLoading: Boolean) : Msg
         data class SetLoadingChannels(val isLoading: Boolean) : Msg
         data class SetLoadingMessages(val isLoading: Boolean) : Msg
+        data class SetLoadingThreads(val isLoading: Boolean) : Msg
+        data class SetLoadingProjects(val isLoading: Boolean) : Msg
         data class SetCreateTeamOpen(val isOpen: Boolean) : Msg
         data class SetCreateTeamName(val name: String) : Msg
         data class SetCreateTeamDescription(val description: String) : Msg
@@ -366,12 +440,18 @@ class MainStoreFactory(
         data class SetCreatingTeam(val isCreating: Boolean) : Msg
         data class SetCreateChannelOpen(val isOpen: Boolean) : Msg
         data class SetCreateChannelName(val name: String) : Msg
-        data class SetCreateChannelNotice(val notice: String) : Msg
+        data class SetCreateChannelDescription(val description: String) : Msg
         data class SetCreateChannelType(val type: ChannelType) : Msg
+        data class SetCreateChannelPrivate(val isPrivate: Boolean) : Msg
         data class SetCreatingChannel(val isCreating: Boolean) : Msg
+        data class SetCreateProjectOpen(val isOpen: Boolean) : Msg
+        data class SetCreateProjectName(val name: String) : Msg
+        data class SetCreateProjectDescription(val description: String) : Msg
+        data class SetCreatingProject(val isCreating: Boolean) : Msg
         data class SetError(val error: String?) : Msg
         data object ResetCreateTeamForm : Msg
         data object ResetCreateChannelForm : Msg
+        data object ResetCreateProjectForm : Msg
         data class SetAccountInfo(val accountId: Long?, val email: String?) : Msg
         data class SetUserProfile(val profile: com.cowork.desktop.client.domain.model.UserProfile) : Msg
         data class SetAccountStatus(val status: UserStatus) : Msg
@@ -401,18 +481,30 @@ class MainStoreFactory(
                 channels = emptyList(),
                 selectedChannelId = null,
                 messages = emptyList(),
+                threads = emptyList(),
+                projects = emptyList(),
+                selectedProjectId = null,
                 error = null,
             )
-            is Msg.SelectChannel -> copy(selectedChannelId = msg.channelId, messages = emptyList())
+            is Msg.SelectChannel -> copy(
+                selectedChannelId = msg.channelId,
+                messages = emptyList(),
+                threads = emptyList(),
+            )
+            is Msg.SelectProject -> copy(selectedProjectId = msg.projectId)
             is Msg.SetChannels -> copy(
                 channels = msg.channels,
                 selectedChannelId = msg.selectedChannelId,
                 messages = if (msg.selectedChannelId == null) emptyList() else messages,
             )
             is Msg.SetMessages -> copy(messages = msg.messages)
+            is Msg.SetThreads -> copy(threads = msg.threads)
+            is Msg.SetProjects -> copy(projects = msg.projects)
             is Msg.SetLoadingTeams -> copy(isLoadingTeams = msg.isLoading)
             is Msg.SetLoadingChannels -> copy(isLoadingChannels = msg.isLoading)
             is Msg.SetLoadingMessages -> copy(isLoadingMessages = msg.isLoading)
+            is Msg.SetLoadingThreads -> copy(isLoadingThreads = msg.isLoading)
+            is Msg.SetLoadingProjects -> copy(isLoadingProjects = msg.isLoading)
             is Msg.SetCreateTeamOpen -> copy(isCreateTeamOpen = msg.isOpen, error = null)
             is Msg.SetCreateTeamName -> copy(createTeamName = msg.name)
             is Msg.SetCreateTeamDescription -> copy(createTeamDescription = msg.description)
@@ -420,9 +512,14 @@ class MainStoreFactory(
             is Msg.SetCreatingTeam -> copy(isCreatingTeam = msg.isCreating)
             is Msg.SetCreateChannelOpen -> copy(isCreateChannelOpen = msg.isOpen, error = null)
             is Msg.SetCreateChannelName -> copy(createChannelName = msg.name)
-            is Msg.SetCreateChannelNotice -> copy(createChannelNotice = msg.notice)
+            is Msg.SetCreateChannelDescription -> copy(createChannelDescription = msg.description)
             is Msg.SetCreateChannelType -> copy(createChannelType = msg.type)
+            is Msg.SetCreateChannelPrivate -> copy(createChannelIsPrivate = msg.isPrivate)
             is Msg.SetCreatingChannel -> copy(isCreatingChannel = msg.isCreating)
+            is Msg.SetCreateProjectOpen -> copy(isCreateProjectOpen = msg.isOpen, error = null)
+            is Msg.SetCreateProjectName -> copy(createProjectName = msg.name)
+            is Msg.SetCreateProjectDescription -> copy(createProjectDescription = msg.description)
+            is Msg.SetCreatingProject -> copy(isCreatingProject = msg.isCreating)
             is Msg.SetError -> copy(error = msg.error)
             Msg.ResetCreateTeamForm -> copy(
                 isCreateTeamOpen = false,
@@ -435,9 +532,16 @@ class MainStoreFactory(
             Msg.ResetCreateChannelForm -> copy(
                 isCreateChannelOpen = false,
                 createChannelName = "",
-                createChannelNotice = "",
+                createChannelDescription = "",
                 createChannelType = ChannelType.Text,
+                createChannelIsPrivate = false,
                 isCreatingChannel = false,
+            )
+            Msg.ResetCreateProjectForm -> copy(
+                isCreateProjectOpen = false,
+                createProjectName = "",
+                createProjectDescription = "",
+                isCreatingProject = false,
             )
             is Msg.SetAccountInfo -> copy(accountId = msg.accountId, accountEmail = msg.email)
             is Msg.SetUserProfile -> copy(
