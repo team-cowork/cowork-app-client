@@ -37,7 +37,9 @@ import com.cowork.desktop.client.data.repository.AuthRepository
 import com.cowork.desktop.client.data.repository.ChannelRepository
 import com.cowork.desktop.client.data.repository.ChatRepository
 import com.cowork.desktop.client.data.repository.PreferenceRepository
+import com.cowork.desktop.client.data.repository.ProjectRepository
 import com.cowork.desktop.client.data.repository.TeamRepository
+import com.cowork.desktop.client.data.repository.ThreadRepository
 import com.cowork.desktop.client.data.repository.UserRepository
 import com.cowork.desktop.client.di.commonModule
 import com.cowork.desktop.client.di.jvmModule
@@ -73,6 +75,8 @@ fun main(args: Array<String>) {
             chatRepository = koin.get<ChatRepository>(),
             preferenceRepository = koin.get<PreferenceRepository>(),
             userRepository = koin.get<UserRepository>(),
+            projectRepository = koin.get<ProjectRepository>(),
+            threadRepository = koin.get<ThreadRepository>(),
             layoutPreferenceStorage = koin.get<LayoutPreferenceStorage>(),
             oAuthLauncher = koin.get<OAuthLauncher>(),
         )

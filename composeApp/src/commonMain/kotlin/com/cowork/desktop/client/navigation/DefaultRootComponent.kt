@@ -12,7 +12,9 @@ import com.cowork.desktop.client.data.repository.AuthRepository
 import com.cowork.desktop.client.data.repository.ChannelRepository
 import com.cowork.desktop.client.data.repository.ChatRepository
 import com.cowork.desktop.client.data.repository.PreferenceRepository
+import com.cowork.desktop.client.data.repository.ProjectRepository
 import com.cowork.desktop.client.data.repository.TeamRepository
+import com.cowork.desktop.client.data.repository.ThreadRepository
 import com.cowork.desktop.client.data.repository.UserRepository
 import com.cowork.desktop.client.feature.auth.OAuthLauncher
 import com.cowork.desktop.client.feature.auth.component.DefaultAuthComponent
@@ -29,6 +31,8 @@ class DefaultRootComponent(
     private val chatRepository: ChatRepository,
     private val preferenceRepository: PreferenceRepository,
     private val userRepository: UserRepository,
+    private val projectRepository: ProjectRepository,
+    private val threadRepository: ThreadRepository,
     private val layoutPreferenceStorage: LayoutPreferenceStorage,
     private val oAuthLauncher: OAuthLauncher,
 ) : RootComponent, ComponentContext by componentContext {
@@ -66,6 +70,8 @@ class DefaultRootComponent(
                     chatRepository = chatRepository,
                     preferenceRepository = preferenceRepository,
                     userRepository = userRepository,
+                    projectRepository = projectRepository,
+                    threadRepository = threadRepository,
                     layoutPreferenceStorage = layoutPreferenceStorage,
                     onSignedOut = { navigation.replaceAll(Config.Auth) },
                 )
