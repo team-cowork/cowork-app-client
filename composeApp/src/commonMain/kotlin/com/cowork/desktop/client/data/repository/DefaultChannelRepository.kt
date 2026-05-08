@@ -2,6 +2,7 @@ package com.cowork.desktop.client.data.repository
 
 import com.cowork.desktop.client.data.remote.ChannelApi
 import com.cowork.desktop.client.domain.model.Channel
+import com.cowork.desktop.client.domain.model.ChannelMember
 import com.cowork.desktop.client.domain.model.ChannelType
 
 class DefaultChannelRepository(
@@ -35,10 +36,10 @@ class DefaultChannelRepository(
     override suspend fun deleteChannel(channelId: Long) =
         authorized { channelApi.deleteChannel(it, channelId) }
 
-    override suspend fun getMembers(channelId: Long): List<ChannelApi.ChannelMemberResponse> =
+    override suspend fun getMembers(channelId: Long): List<ChannelMember> =
         authorized { channelApi.getMembers(it, channelId) }
 
-    override suspend fun addMember(channelId: Long, userId: Long): ChannelApi.ChannelMemberResponse =
+    override suspend fun addMember(channelId: Long, userId: Long): ChannelMember =
         authorized { channelApi.addMember(it, channelId, userId) }
 
     override suspend fun removeMember(channelId: Long, memberId: Long) =

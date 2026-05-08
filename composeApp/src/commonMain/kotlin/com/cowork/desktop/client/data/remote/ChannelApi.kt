@@ -1,6 +1,7 @@
 package com.cowork.desktop.client.data.remote
 
 import com.cowork.desktop.client.domain.model.Channel
+import com.cowork.desktop.client.domain.model.ChannelMember
 import com.cowork.desktop.client.domain.model.ChannelType
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -74,18 +75,18 @@ class ChannelApi(
         }
     }
 
-    suspend fun addMember(accessToken: String, channelId: Long, userId: Long): ChannelMemberResponse =
+    suspend fun addMember(accessToken: String, channelId: Long, userId: Long): ChannelMember =
         client.post("$baseUrl/channels/$channelId/members") {
             bearerAuth(accessToken)
             contentType(ContentType.Application.Json)
             setBody(AddMemberRequest(userId = userId))
-        }.body<ApiResponse<ChannelMemberResponse>>().data
+        }.body<ApiResponse<ChannelMemberResponse>>().data?.toDomain()
             ?: error("채널 멤버 추가 응답에 data가 없습니다")
 
-    suspend fun getMembers(accessToken: String, channelId: Long): List<ChannelMemberResponse> =
+    suspend fun getMembers(accessToken: String, channelId: Long): List<ChannelMember> =
         client.get("$baseUrl/channels/$channelId/members") {
             bearerAuth(accessToken)
-        }.body<ApiResponse<List<ChannelMemberResponse>>>().data.orEmpty()
+        }.body<ApiResponse<List<ChannelMemberResponse>>>().data.orEmpty().map(ChannelMemberResponse::toDomain)
 
     suspend fun removeMember(accessToken: String, channelId: Long, memberId: Long) {
         client.delete("$baseUrl/channels/$channelId/members/$memberId") {
@@ -119,7 +120,14 @@ class ChannelApi(
         val channelId: Long,
         val userId: Long,
         val joinedAt: String? = null,
-    )
+    ) {
+        fun toDomain(): ChannelMember = ChannelMember(
+            id = id,
+            channelId = channelId,
+            userId = userId,
+            joinedAt = joinedAt,
+        )
+    }
 
     @Serializable
     private data class ChannelResponse(

@@ -1,7 +1,7 @@
 package com.cowork.desktop.client.data.repository
 
-import com.cowork.desktop.client.data.remote.ChannelApi
 import com.cowork.desktop.client.domain.model.Channel
+import com.cowork.desktop.client.domain.model.ChannelMember
 import com.cowork.desktop.client.domain.model.ChannelType
 
 interface ChannelRepository {
@@ -21,7 +21,7 @@ interface ChannelRepository {
         isPrivate: Boolean? = null,
     ): Channel
     suspend fun deleteChannel(channelId: Long)
-    suspend fun getMembers(channelId: Long): List<ChannelApi.ChannelMemberResponse>
-    suspend fun addMember(channelId: Long, userId: Long): ChannelApi.ChannelMemberResponse
+    suspend fun getMembers(channelId: Long): List<ChannelMember>
+    suspend fun addMember(channelId: Long, userId: Long): ChannelMember
     suspend fun removeMember(channelId: Long, memberId: Long)
 }

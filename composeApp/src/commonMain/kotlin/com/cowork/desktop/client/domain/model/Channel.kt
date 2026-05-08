@@ -9,6 +9,13 @@ data class Channel(
     val isPrivate: Boolean,
 )
 
+data class ChannelMember(
+    val id: Long,
+    val channelId: Long,
+    val userId: Long,
+    val joinedAt: String?,
+)
+
 enum class ChannelType {
     Text,
     Voice,
