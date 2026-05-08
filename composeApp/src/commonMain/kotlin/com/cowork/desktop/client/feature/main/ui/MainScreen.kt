@@ -25,12 +25,14 @@ import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,7 +53,9 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Settings
@@ -106,8 +110,11 @@ import com.cowork.desktop.client.domain.model.AppTheme
 import com.cowork.desktop.client.domain.model.Channel
 import com.cowork.desktop.client.domain.model.ChannelType
 import com.cowork.desktop.client.domain.model.DateFormat
+import com.cowork.desktop.client.domain.model.Project
+import com.cowork.desktop.client.domain.model.ProjectStatus
 import com.cowork.desktop.client.domain.model.TeamRole
 import com.cowork.desktop.client.domain.model.TeamSummary
+import com.cowork.desktop.client.domain.model.Thread
 import com.cowork.desktop.client.domain.model.TimeFormat
 import com.cowork.desktop.client.domain.model.UserStatus
 import com.cowork.desktop.client.feature.main.component.MainComponent
@@ -166,6 +173,8 @@ fun MainScreen(component: MainComponent) {
                     width = channelPaneWidth,
                     onChannelClick = component::onChannelClick,
                     onCreateChannelClick = component::onCreateChannelClick,
+                    onProjectClick = component::onProjectClick,
+                    onCreateProjectClick = component::onCreateProjectClick,
                     onAccountBarClick = component::onAccountMenuClick,
                 )
 
@@ -240,9 +249,20 @@ fun MainScreen(component: MainComponent) {
                     state = state,
                     onDismiss = component::onCreateChannelDismiss,
                     onNameChange = component::onCreateChannelNameChange,
-                    onNoticeChange = component::onCreateChannelNoticeChange,
+                    onDescriptionChange = component::onCreateChannelDescriptionChange,
                     onTypeChange = component::onCreateChannelTypeChange,
+                    onPrivateChange = component::onCreateChannelPrivateChange,
                     onSubmit = component::onCreateChannelSubmit,
+                )
+            }
+
+            if (state.isCreateProjectOpen) {
+                CreateProjectDialog(
+                    state = state,
+                    onDismiss = component::onCreateProjectDismiss,
+                    onNameChange = component::onCreateProjectNameChange,
+                    onDescriptionChange = component::onCreateProjectDescriptionChange,
+                    onSubmit = component::onCreateProjectSubmit,
                 )
             }
 
@@ -404,6 +424,8 @@ private fun ChannelPane(
     width: Dp,
     onChannelClick: (Long) -> Unit,
     onCreateChannelClick: () -> Unit,
+    onProjectClick: (Long) -> Unit,
+    onCreateProjectClick: () -> Unit,
     onAccountBarClick: () -> Unit,
 ) {
     Box(
@@ -488,6 +510,48 @@ private fun ChannelPane(
                             isSelected = channel.id == state.selectedChannelId,
                             onClick = { onChannelClick(channel.id) },
                         )
+                    }
+                }
+            }
+
+            if (state.selectedTeamId != null) {
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "프로젝트",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    TextButton(onClick = onCreateProjectClick) {
+                        Text("+")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                when {
+                    state.isLoadingProjects -> CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp).padding(top = 4.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    state.projects.isEmpty() -> EmptyPaneText("아직 프로젝트가 없습니다.")
+                    else -> LazyColumn(
+                        modifier = Modifier.weight(1f, fill = false),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        items(state.projects, key = { it.id }) { project ->
+                            ProjectRow(
+                                project = project,
+                                isSelected = project.id == state.selectedProjectId,
+                                onClick = { onProjectClick(project.id) },
+                            )
+                        }
                     }
                 }
             }
@@ -1193,83 +1257,275 @@ private fun ChannelRow(
 }
 
 @Composable
+private fun ProjectRow(
+    project: Project,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.FolderOpen,
+            contentDescription = null,
+            modifier = Modifier.size(15.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = project.name,
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (project.status == ProjectStatus.Archived) {
+            Text(
+                text = "보관됨",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ThreadRow(thread: Thread) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.Article,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = if (thread.isArchived) MaterialTheme.colorScheme.onSurfaceVariant
+                   else MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = thread.name,
+            modifier = Modifier.weight(1f),
+            color = if (thread.isArchived) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (thread.isArchived) {
+            Text(
+                text = "보관됨",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
 private fun WorkspacePane(state: MainStore.State) {
+    val selectedChannel = state.selectedChannel
+    val selectedProject = state.selectedProject
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(32.dp),
     ) {
+        when {
+            selectedChannel != null -> ChannelWorkspace(state = state, channel = selectedChannel)
+            selectedProject != null -> ProjectWorkspace(project = selectedProject)
+            else -> EmptyWorkspace(state = state)
+        }
+    }
+}
+
+@Composable
+private fun EmptyWorkspace(state: MainStore.State) {
+    Text(
+        text = state.selectedTeam?.name ?: "팀을 선택하세요",
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onBackground,
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = "채널 또는 프로젝트를 선택하세요.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun ColumnScope.ChannelWorkspace(state: MainStore.State, channel: Channel) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(
+            imageVector = channel.type.icon(),
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
         Text(
-            text = state.selectedChannel?.name ?: state.selectedTeam?.name ?: "팀을 선택하세요",
+            text = channel.name,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
         )
+        if (channel.isPrivate) {
+            Icon(
+                imageVector = Icons.Rounded.Lock,
+                contentDescription = "비공개",
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 
-        Spacer(modifier = Modifier.height(8.dp))
+    channel.description?.takeIf { it.isNotBlank() }?.let { description ->
+        Spacer(modifier = Modifier.height(12.dp))
+        Surface(
+            color = MaterialTheme.colorScheme.primaryContainer,
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            Text(
+                text = description,
+                modifier = Modifier.padding(12.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+    }
 
+    if (channel.type == ChannelType.Text) {
+        Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = state.selectedChannel?.let { channel ->
-                "${channel.type.label()} 채널입니다. 채팅/음성/웹훅 작업 영역이 이 패널에 이어서 구현됩니다."
-            } ?: "채팅, 이슈, 음성채팅 작업 영역이 이 패널에 이어서 구현됩니다.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = "메시지",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
         )
+        Spacer(modifier = Modifier.height(12.dp))
 
-        state.selectedChannel?.notice?.takeIf { it.isNotBlank() }?.let { notice ->
-            Spacer(modifier = Modifier.height(24.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = MaterialTheme.shapes.medium,
+        when {
+            state.isLoadingMessages -> CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+            state.messages.isEmpty() -> EmptyPaneText("메시지가 없습니다.")
+            else -> LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(
-                    text = notice,
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
+                items(state.messages, key = { it.id }) { message ->
+                    MessageRow(message = message)
+                }
             }
         }
 
-        if (state.selectedChannel?.type == ChannelType.Text) {
-            Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = "",
+            onValueChange = {},
+            modifier = Modifier.fillMaxWidth(),
+            enabled = false,
+            placeholder = { Text("Socket.io JWT 인증 연결 후 메시지 전송 활성화") },
+            singleLine = true,
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
             Text(
-                text = "메시지",
+                text = "스레드",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,
             )
-            Spacer(modifier = Modifier.height(12.dp))
-
-            when {
-                state.isLoadingMessages -> CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp),
-                    strokeWidth = 2.dp,
-                )
-                state.messages.isEmpty() -> EmptyPaneText(
-                    "메시지 조회 API가 연결되면 최근 메시지가 표시됩니다.",
-                )
-                else -> LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(state.messages, key = { it.id }) { message ->
-                        MessageRow(message = message)
-                    }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        when {
+            state.isLoadingThreads -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            state.threads.isEmpty() -> EmptyPaneText("스레드가 없습니다.")
+            else -> LazyColumn(
+                modifier = Modifier.heightIn(max = 200.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(state.threads, key = { it.id }) { thread ->
+                    ThreadRow(thread = thread)
                 }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = "",
-                onValueChange = {},
-                modifier = Modifier.fillMaxWidth(),
-                enabled = false,
-                placeholder = { Text("Socket.io JWT 인증 연결 후 메시지 전송 활성화") },
-                singleLine = true,
+@Composable
+private fun ProjectWorkspace(project: Project) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(
+            imageVector = Icons.Rounded.FolderOpen,
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = project.name,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Surface(
+            color = when (project.status) {
+                ProjectStatus.Active -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                ProjectStatus.Archived -> MaterialTheme.colorScheme.surfaceVariant
+                ProjectStatus.Unknown -> MaterialTheme.colorScheme.surfaceVariant
+            },
+            shape = MaterialTheme.shapes.small,
+        ) {
+            Text(
+                text = when (project.status) {
+                    ProjectStatus.Active -> "활성"
+                    ProjectStatus.Archived -> "보관됨"
+                    ProjectStatus.Unknown -> "알 수 없음"
+                },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = when (project.status) {
+                    ProjectStatus.Active -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
         }
     }
+
+    project.description?.takeIf { it.isNotBlank() }?.let { description ->
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
+    Text(
+        text = "칸반 보드, 이슈 트래커 등 작업 영역이 이 패널에 이어서 구현됩니다.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
@@ -1738,8 +1994,9 @@ private fun CreateChannelDialog(
     state: MainStore.State,
     onDismiss: () -> Unit,
     onNameChange: (String) -> Unit,
-    onNoticeChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
     onTypeChange: (ChannelType) -> Unit,
+    onPrivateChange: (Boolean) -> Unit,
     onSubmit: () -> Unit,
 ) {
     CoworkDialog(onDismissRequest = onDismiss) {
@@ -1781,14 +2038,35 @@ private fun CreateChannelDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                DialogFieldLabel("공지 (선택)")
+                DialogFieldLabel("설명 (선택)")
                 Spacer(modifier = Modifier.height(6.dp))
                 DialogTextField(
-                    value = state.createChannelNotice,
-                    onValueChange = onNoticeChange,
-                    placeholder = "채널 상단에 표시될 공지 내용",
-                    minLines = 3,
+                    value = state.createChannelDescription,
+                    onValueChange = onDescriptionChange,
+                    placeholder = "채널에 대한 간단한 설명",
+                    minLines = 2,
                 )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column {
+                        DialogFieldLabel("비공개 채널")
+                        Text(
+                            text = "초대된 멤버만 접근할 수 있습니다",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = state.createChannelIsPrivate,
+                        onCheckedChange = onPrivateChange,
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -1796,6 +2074,56 @@ private fun CreateChannelDialog(
                     label = "채널 만들기",
                     enabled = state.canSubmitChannel,
                     isLoading = state.isCreatingChannel,
+                    onClick = onSubmit,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreateProjectDialog(
+    state: MainStore.State,
+    onDismiss: () -> Unit,
+    onNameChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+) {
+    CoworkDialog(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.width(440.dp)) {
+            CoworkDialogHeader(
+                title = "새 프로젝트 만들기",
+                subtitle = "프로젝트 이름과 설명을 입력하세요.",
+                onDismiss = onDismiss,
+            )
+
+            Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
+                DialogFieldLabel("프로젝트 이름")
+                Spacer(modifier = Modifier.height(6.dp))
+                DialogTextField(
+                    value = state.createProjectName,
+                    onValueChange = onNameChange,
+                    placeholder = "예: 코워크 앱 개발",
+                    singleLine = true,
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                DialogFieldLabel("설명 (선택)")
+                Spacer(modifier = Modifier.height(6.dp))
+                DialogTextField(
+                    value = state.createProjectDescription,
+                    onValueChange = onDescriptionChange,
+                    placeholder = "프로젝트에 대한 간단한 설명",
+                    minLines = 3,
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                DialogSubmitButton(
+                    label = "프로젝트 만들기",
+                    enabled = state.canSubmitProject,
+                    isLoading = state.isCreatingProject,
                     onClick = onSubmit,
                 )
             }
@@ -2031,6 +2359,8 @@ private fun ChannelType.icon(): ImageVector = when (this) {
     ChannelType.Voice -> Icons.AutoMirrored.Rounded.VolumeUp
     ChannelType.Webhook -> Icons.Rounded.Link
     ChannelType.MeetingNote -> Icons.AutoMirrored.Rounded.Article
+    ChannelType.AccountShare -> Icons.Rounded.Person
+    ChannelType.FileShare -> Icons.AutoMirrored.Rounded.Article
     ChannelType.Unknown -> Icons.AutoMirrored.Rounded.HelpOutline
 }
 
@@ -2039,5 +2369,7 @@ private fun ChannelType.label(): String = when (this) {
     ChannelType.Voice -> "음성"
     ChannelType.Webhook -> "웹훅"
     ChannelType.MeetingNote -> "회의록"
+    ChannelType.AccountShare -> "계정 공유"
+    ChannelType.FileShare -> "파일 공유"
     ChannelType.Unknown -> "알 수 없음"
 }
