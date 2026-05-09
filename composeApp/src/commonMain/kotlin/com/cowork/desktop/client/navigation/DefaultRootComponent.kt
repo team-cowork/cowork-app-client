@@ -16,6 +16,7 @@ import com.cowork.desktop.client.data.repository.ProjectRepository
 import com.cowork.desktop.client.data.repository.TeamRepository
 import com.cowork.desktop.client.data.repository.ThreadRepository
 import com.cowork.desktop.client.data.repository.UserRepository
+import com.cowork.desktop.client.data.repository.WebhookRepository
 import com.cowork.desktop.client.feature.auth.OAuthLauncher
 import com.cowork.desktop.client.feature.auth.component.DefaultAuthComponent
 import com.cowork.desktop.client.feature.main.component.DefaultMainComponent
@@ -33,6 +34,7 @@ class DefaultRootComponent(
     private val userRepository: UserRepository,
     private val projectRepository: ProjectRepository,
     private val threadRepository: ThreadRepository,
+    private val webhookRepository: WebhookRepository,
     private val layoutPreferenceStorage: LayoutPreferenceStorage,
     private val oAuthLauncher: OAuthLauncher,
 ) : RootComponent, ComponentContext by componentContext {
@@ -72,6 +74,7 @@ class DefaultRootComponent(
                     userRepository = userRepository,
                     projectRepository = projectRepository,
                     threadRepository = threadRepository,
+                    webhookRepository = webhookRepository,
                     layoutPreferenceStorage = layoutPreferenceStorage,
                     onSignedOut = { navigation.replaceAll(Config.Auth) },
                 )

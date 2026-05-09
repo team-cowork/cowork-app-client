@@ -48,4 +48,12 @@ interface MainComponent {
     fun onTimeFormatChange(timeFormat: TimeFormat)
     fun onDateFormatChange(dateFormat: DateFormat)
     fun onMarketingEmailChange(enabled: Boolean)
+    fun onAddWebhookClick()
+    fun onAddWebhookDismiss()
+    fun onAddWebhookNameChange(name: String)
+    fun onAddWebhookSecureChange(isSecure: Boolean)
+    fun onAddWebhookSubmit()
+    fun onDeleteWebhook(webhookId: Long)
+    fun onReorderChannels(fromIndex: Int, toIndex: Int)
+    fun onReorderProjects(fromIndex: Int, toIndex: Int)
 }

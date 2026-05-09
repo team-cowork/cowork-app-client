@@ -13,6 +13,8 @@ import com.cowork.desktop.client.data.repository.SessionExpiredException
 import com.cowork.desktop.client.data.repository.TeamRepository
 import com.cowork.desktop.client.data.repository.ThreadRepository
 import com.cowork.desktop.client.data.repository.UserRepository
+import com.cowork.desktop.client.data.repository.WebhookRepository
+import com.cowork.desktop.client.domain.model.Webhook
 import com.cowork.desktop.client.domain.model.AppLanguage
 import com.cowork.desktop.client.domain.model.AppTheme
 import com.cowork.desktop.client.domain.model.Channel
@@ -45,6 +47,7 @@ class MainStoreFactory(
     private val userRepository: UserRepository,
     private val projectRepository: ProjectRepository,
     private val threadRepository: ThreadRepository,
+    private val webhookRepository: WebhookRepository,
 ) {
     fun create(): MainStore =
         object : MainStore, Store<Intent, State, Label> by storeFactory.create(
@@ -104,6 +107,14 @@ class MainStoreFactory(
                 is Intent.UpdateTimeFormat -> updateAppearance(timeFormat = intent.timeFormat)
                 is Intent.UpdateDateFormat -> updateAppearance(dateFormat = intent.dateFormat)
                 is Intent.UpdateMarketingEmail -> updateMarketingEmail(intent.enabled)
+                Intent.OpenAddWebhook -> dispatch(Msg.SetAddWebhookOpen(true))
+                Intent.CloseAddWebhook -> dispatch(Msg.ResetAddWebhookForm)
+                is Intent.ChangeAddWebhookName -> dispatch(Msg.SetAddWebhookName(intent.name))
+                is Intent.ChangeAddWebhookSecure -> dispatch(Msg.SetAddWebhookSecure(intent.isSecure))
+                Intent.SubmitAddWebhook -> submitAddWebhook()
+                is Intent.DeleteWebhook -> deleteWebhook(intent.webhookId)
+                is Intent.ReorderChannels -> dispatch(Msg.ReorderChannels(intent.fromIndex, intent.toIndex))
+                is Intent.ReorderProjects -> dispatch(Msg.ReorderProjects(intent.fromIndex, intent.toIndex))
             }
         }
 
@@ -220,9 +231,14 @@ class MainStoreFactory(
         }
 
         private fun selectChannel(channelId: Long) {
+            val channel = state().channels.firstOrNull { it.id == channelId }
             dispatch(Msg.SelectChannel(channelId))
-            loadMessages(channelId)
-            loadThreads(channelId)
+            if (channel?.type == ChannelType.Webhook) {
+                loadWebhooks(channelId)
+            } else {
+                loadMessages(channelId)
+                loadThreads(channelId)
+            }
         }
 
         private fun selectProject(projectId: Long) {
@@ -417,6 +433,51 @@ class MainStoreFactory(
                 }
             }
         }
+
+        private fun loadWebhooks(channelId: Long) {
+            scope.launch {
+                dispatch(Msg.SetLoadingWebhooks(true))
+                runCatching { webhookRepository.getWebhooks(channelId) }
+                    .onSuccess { dispatch(Msg.SetWebhooks(it)) }
+                    .onFailure {
+                        if (it.handleIfSessionExpired()) return@launch
+                        dispatch(Msg.SetWebhooks(emptyList()))
+                    }
+                dispatch(Msg.SetLoadingWebhooks(false))
+            }
+        }
+
+        private fun submitAddWebhook() {
+            val channelId = state().selectedChannelId ?: return
+            val name = state().addWebhookName.trim()
+            val isSecure = state().addWebhookIsSecure
+            if (name.isBlank() || state().isAddingWebhook) return
+            scope.launch {
+                dispatch(Msg.SetAddingWebhook(true))
+                runCatching { webhookRepository.createWebhook(channelId, name, null, isSecure) }
+                    .onSuccess { webhook ->
+                        dispatch(Msg.ResetAddWebhookForm)
+                        dispatch(Msg.AddWebhook(webhook))
+                    }
+                    .onFailure {
+                        if (it.handleIfSessionExpired()) return@launch
+                        dispatch(Msg.SetError("웹훅을 추가하지 못했습니다."))
+                        dispatch(Msg.SetAddingWebhook(false))
+                    }
+            }
+        }
+
+        private fun deleteWebhook(webhookId: Long) {
+            val channelId = state().selectedChannelId ?: return
+            scope.launch {
+                runCatching { webhookRepository.deleteWebhook(channelId, webhookId) }
+                    .onSuccess { dispatch(Msg.RemoveWebhook(webhookId)) }
+                    .onFailure {
+                        if (it.handleIfSessionExpired()) return@launch
+                        dispatch(Msg.SetError("웹훅을 삭제하지 못했습니다."))
+                    }
+            }
+        }
     }
 
     private sealed interface Msg {
@@ -467,6 +528,17 @@ class MainStoreFactory(
             val marketingEmail: Boolean,
         ) : Msg
         data class SetUpdatingSettings(val isUpdating: Boolean) : Msg
+        data class SetWebhooks(val webhooks: List<Webhook>) : Msg
+        data class SetLoadingWebhooks(val isLoading: Boolean) : Msg
+        data class SetAddWebhookOpen(val isOpen: Boolean) : Msg
+        data class SetAddWebhookName(val name: String) : Msg
+        data class SetAddWebhookSecure(val isSecure: Boolean) : Msg
+        data class SetAddingWebhook(val isAdding: Boolean) : Msg
+        data class AddWebhook(val webhook: Webhook) : Msg
+        data class RemoveWebhook(val webhookId: Long) : Msg
+        data object ResetAddWebhookForm : Msg
+        data class ReorderChannels(val fromIndex: Int, val toIndex: Int) : Msg
+        data class ReorderProjects(val fromIndex: Int, val toIndex: Int) : Msg
     }
 
     private object Reducer : com.arkivanov.mvikotlin.core.store.Reducer<State, Msg> {
@@ -488,8 +560,10 @@ class MainStoreFactory(
             )
             is Msg.SelectChannel -> copy(
                 selectedChannelId = msg.channelId,
+                selectedProjectId = null,
                 messages = emptyList(),
                 threads = emptyList(),
+                webhooks = emptyList(),
             )
             is Msg.SelectProject -> copy(selectedProjectId = msg.projectId)
             is Msg.SetChannels -> copy(
@@ -569,6 +643,32 @@ class MainStoreFactory(
                 accountMarketingEmail = msg.marketingEmail,
             )
             is Msg.SetUpdatingSettings -> copy(isUpdatingSettings = msg.isUpdating)
+            is Msg.SetWebhooks -> copy(webhooks = msg.webhooks)
+            is Msg.SetLoadingWebhooks -> copy(isLoadingWebhooks = msg.isLoading)
+            is Msg.SetAddWebhookOpen -> copy(isAddWebhookOpen = msg.isOpen)
+            is Msg.SetAddWebhookName -> copy(addWebhookName = msg.name)
+            is Msg.SetAddWebhookSecure -> copy(addWebhookIsSecure = msg.isSecure)
+            is Msg.SetAddingWebhook -> copy(isAddingWebhook = msg.isAdding)
+            is Msg.AddWebhook -> copy(webhooks = webhooks + msg.webhook)
+            is Msg.RemoveWebhook -> copy(webhooks = webhooks.filter { it.id != msg.webhookId })
+            Msg.ResetAddWebhookForm -> copy(
+                isAddWebhookOpen = false,
+                addWebhookName = "",
+                addWebhookIsSecure = false,
+                isAddingWebhook = false,
+            )
+            is Msg.ReorderChannels -> {
+                val list = channels.toMutableList()
+                val item = list.removeAt(msg.fromIndex)
+                list.add(msg.toIndex, item)
+                copy(channels = list)
+            }
+            is Msg.ReorderProjects -> {
+                val list = projects.toMutableList()
+                val item = list.removeAt(msg.fromIndex)
+                list.add(msg.toIndex, item)
+                copy(projects = list)
+            }
         }
     }
 }

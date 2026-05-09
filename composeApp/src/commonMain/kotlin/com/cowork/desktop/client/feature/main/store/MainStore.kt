@@ -12,6 +12,7 @@ import com.cowork.desktop.client.domain.model.TeamSummary
 import com.cowork.desktop.client.domain.model.Thread
 import com.cowork.desktop.client.domain.model.TimeFormat
 import com.cowork.desktop.client.domain.model.UserStatus
+import com.cowork.desktop.client.domain.model.Webhook
 import com.cowork.desktop.client.feature.main.store.MainStore.Intent
 import com.cowork.desktop.client.feature.main.store.MainStore.Label
 import com.cowork.desktop.client.feature.main.store.MainStore.State
@@ -54,6 +55,14 @@ interface MainStore : Store<Intent, State, Label> {
         data class UpdateTimeFormat(val timeFormat: TimeFormat) : Intent
         data class UpdateDateFormat(val dateFormat: DateFormat) : Intent
         data class UpdateMarketingEmail(val enabled: Boolean) : Intent
+        data object OpenAddWebhook : Intent
+        data object CloseAddWebhook : Intent
+        data class ChangeAddWebhookName(val name: String) : Intent
+        data class ChangeAddWebhookSecure(val isSecure: Boolean) : Intent
+        data object SubmitAddWebhook : Intent
+        data class DeleteWebhook(val webhookId: Long) : Intent
+        data class ReorderChannels(val fromIndex: Int, val toIndex: Int) : Intent
+        data class ReorderProjects(val fromIndex: Int, val toIndex: Int) : Intent
     }
 
     data class State(
@@ -63,6 +72,12 @@ interface MainStore : Store<Intent, State, Label> {
         val selectedChannelId: Long? = null,
         val messages: List<ChatMessage> = emptyList(),
         val threads: List<Thread> = emptyList(),
+        val webhooks: List<Webhook> = emptyList(),
+        val isLoadingWebhooks: Boolean = false,
+        val isAddWebhookOpen: Boolean = false,
+        val addWebhookName: String = "",
+        val addWebhookIsSecure: Boolean = false,
+        val isAddingWebhook: Boolean = false,
         val projects: List<Project> = emptyList(),
         val selectedProjectId: Long? = null,
         val isLoadingTeams: Boolean = false,
@@ -128,6 +143,9 @@ interface MainStore : Store<Intent, State, Label> {
 
         val canSubmitProject: Boolean
             get() = selectedTeamId != null && createProjectName.isNotBlank() && !isCreatingProject
+
+        val canSubmitWebhook: Boolean
+            get() = addWebhookName.isNotBlank() && !isAddingWebhook
     }
 
     sealed interface Label {

@@ -15,6 +15,7 @@ import com.cowork.desktop.client.data.repository.ProjectRepository
 import com.cowork.desktop.client.data.repository.TeamRepository
 import com.cowork.desktop.client.data.repository.ThreadRepository
 import com.cowork.desktop.client.data.repository.UserRepository
+import com.cowork.desktop.client.data.repository.WebhookRepository
 import com.cowork.desktop.client.domain.model.AppLanguage
 import com.cowork.desktop.client.domain.model.AppTheme
 import com.cowork.desktop.client.domain.model.ChannelType
@@ -42,6 +43,7 @@ class DefaultMainComponent(
     userRepository: UserRepository,
     projectRepository: ProjectRepository,
     threadRepository: ThreadRepository,
+    webhookRepository: WebhookRepository,
     override val layoutPreferenceStorage: LayoutPreferenceStorage,
     private val onSignedOut: () -> Unit,
 ) : MainComponent, ComponentContext by componentContext {
@@ -59,6 +61,7 @@ class DefaultMainComponent(
             userRepository = userRepository,
             projectRepository = projectRepository,
             threadRepository = threadRepository,
+            webhookRepository = webhookRepository,
         ).create()
     }
 
@@ -111,4 +114,12 @@ class DefaultMainComponent(
     override fun onTimeFormatChange(timeFormat: TimeFormat) = store.accept(MainStore.Intent.UpdateTimeFormat(timeFormat))
     override fun onDateFormatChange(dateFormat: DateFormat) = store.accept(MainStore.Intent.UpdateDateFormat(dateFormat))
     override fun onMarketingEmailChange(enabled: Boolean) = store.accept(MainStore.Intent.UpdateMarketingEmail(enabled))
+    override fun onAddWebhookClick() = store.accept(MainStore.Intent.OpenAddWebhook)
+    override fun onAddWebhookDismiss() = store.accept(MainStore.Intent.CloseAddWebhook)
+    override fun onAddWebhookNameChange(name: String) = store.accept(MainStore.Intent.ChangeAddWebhookName(name))
+    override fun onAddWebhookSecureChange(isSecure: Boolean) = store.accept(MainStore.Intent.ChangeAddWebhookSecure(isSecure))
+    override fun onAddWebhookSubmit() = store.accept(MainStore.Intent.SubmitAddWebhook)
+    override fun onDeleteWebhook(webhookId: Long) = store.accept(MainStore.Intent.DeleteWebhook(webhookId))
+    override fun onReorderChannels(fromIndex: Int, toIndex: Int) = store.accept(MainStore.Intent.ReorderChannels(fromIndex, toIndex))
+    override fun onReorderProjects(fromIndex: Int, toIndex: Int) = store.accept(MainStore.Intent.ReorderProjects(fromIndex, toIndex))
 }
