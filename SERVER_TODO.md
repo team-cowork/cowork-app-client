@@ -50,11 +50,11 @@ var projectId: Long? = null
 **API 추가**
 - `PATCH /teams/{teamId}/channels/reorder`
   ```json
-  { "orderedIds": [3, 1, 5, 2] }
+  { "orderedChannelIds": [3, 1, 5, 2] }
   ```
 - `PATCH /teams/{teamId}/projects/reorder`
   ```json
-  { "orderedIds": [7, 2, 9] }
+  { "orderedProjectIds": [7, 2, 9] }
   ```
 
 **조회 API 정렬 변경**

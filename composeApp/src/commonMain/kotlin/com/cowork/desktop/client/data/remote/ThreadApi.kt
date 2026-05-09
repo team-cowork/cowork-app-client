@@ -18,12 +18,20 @@ class ThreadApi(
     private val baseUrl: String,
 ) {
     suspend fun getThreads(accessToken: String, channelId: Long, includeArchived: Boolean = false): List<Thread> {
-        val response = client.get("$baseUrl/channels/$channelId/threads") {
-            bearerAuth(accessToken)
-            parameter("includeArchived", includeArchived)
-            parameter("size", 50)
-        }.body<ApiResponse<PageResponse<ThreadResponse>>>()
-        return response.data?.content.orEmpty().map(ThreadResponse::toDomain)
+        val result = mutableListOf<ThreadResponse>()
+        var page = 0
+        while (true) {
+            val pageData = client.get("$baseUrl/channels/$channelId/threads") {
+                bearerAuth(accessToken)
+                parameter("includeArchived", includeArchived)
+                parameter("size", PAGE_SIZE)
+                parameter("page", page)
+            }.body<ApiResponse<PageResponse<ThreadResponse>>>().data ?: break
+            result.addAll(pageData.content)
+            if (page >= pageData.totalPages - 1) break
+            page++
+        }
+        return result.map(ThreadResponse::toDomain)
     }
 
     suspend fun createThread(accessToken: String, channelId: Long, name: String, parentMessageId: String): Thread =
@@ -47,6 +55,10 @@ class ThreadApi(
             setBody(UpdateThreadRequest(name = name, isArchived = isArchived))
         }.body<ApiResponse<ThreadResponse>>().data?.toDomain()
             ?: error("스레드 수정 응답에 data가 없습니다")
+
+    private companion object {
+        const val PAGE_SIZE = 50
+    }
 
     @Serializable
     private data class CreateThreadRequest(val name: String, val parentMessageId: String)

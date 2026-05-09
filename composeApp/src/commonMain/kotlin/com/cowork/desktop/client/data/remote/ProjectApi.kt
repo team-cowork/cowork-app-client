@@ -22,17 +22,23 @@ class ProjectApi(
     private val baseUrl: String,
 ) {
     suspend fun getTeamProjects(accessToken: String, teamId: Long): List<Project> =
-        client.get("$baseUrl/projects") {
-            bearerAuth(accessToken)
-            parameter("teamId", teamId)
-            parameter("size", 100)
-        }.body<ApiResponse<PageResponse<ProjectResponse>>>().data?.content.orEmpty().map(ProjectResponse::toDomain)
+        fetchAllPages { page ->
+            client.get("$baseUrl/projects") {
+                bearerAuth(accessToken)
+                parameter("teamId", teamId)
+                parameter("size", PAGE_SIZE)
+                parameter("page", page)
+            }.body<ApiResponse<PageResponse<ProjectResponse>>>().data
+        }.map(ProjectResponse::toDomain)
 
     suspend fun getMyProjects(accessToken: String): List<Project> =
-        client.get("$baseUrl/projects/me") {
-            bearerAuth(accessToken)
-            parameter("size", 100)
-        }.body<ApiResponse<PageResponse<ProjectResponse>>>().data?.content.orEmpty().map(ProjectResponse::toDomain)
+        fetchAllPages { page ->
+            client.get("$baseUrl/projects/me") {
+                bearerAuth(accessToken)
+                parameter("size", PAGE_SIZE)
+                parameter("page", page)
+            }.body<ApiResponse<PageResponse<ProjectResponse>>>().data
+        }.map(ProjectResponse::toDomain)
 
     suspend fun getProject(accessToken: String, projectId: Long): Project =
         client.get("$baseUrl/projects/$projectId") {
@@ -85,6 +91,22 @@ class ProjectApi(
         client.delete("$baseUrl/projects/$projectId/members/$memberId") {
             bearerAuth(accessToken)
         }
+    }
+
+    private companion object {
+        const val PAGE_SIZE = 50
+    }
+
+    private suspend fun <T> fetchAllPages(fetch: suspend (page: Int) -> PageResponse<T>?): List<T> {
+        val result = mutableListOf<T>()
+        var page = 0
+        while (true) {
+            val pageData = fetch(page) ?: break
+            result.addAll(pageData.content)
+            if (page >= pageData.totalPages - 1) break
+            page++
+        }
+        return result
     }
 
     @Serializable
