@@ -7,9 +7,12 @@ import com.cowork.desktop.client.domain.model.Channel
 import com.cowork.desktop.client.domain.model.ChannelType
 import com.cowork.desktop.client.domain.model.ChatMessage
 import com.cowork.desktop.client.domain.model.DateFormat
+import com.cowork.desktop.client.domain.model.Project
 import com.cowork.desktop.client.domain.model.TeamSummary
+import com.cowork.desktop.client.domain.model.Thread
 import com.cowork.desktop.client.domain.model.TimeFormat
 import com.cowork.desktop.client.domain.model.UserStatus
+import com.cowork.desktop.client.domain.model.Webhook
 import com.cowork.desktop.client.feature.main.store.MainStore.Intent
 import com.cowork.desktop.client.feature.main.store.MainStore.Label
 import com.cowork.desktop.client.feature.main.store.MainStore.State
@@ -29,9 +32,16 @@ interface MainStore : Store<Intent, State, Label> {
         data object OpenCreateChannel : Intent
         data object CloseCreateChannel : Intent
         data class ChangeCreateChannelName(val name: String) : Intent
-        data class ChangeCreateChannelNotice(val notice: String) : Intent
+        data class ChangeCreateChannelDescription(val description: String) : Intent
         data class ChangeCreateChannelType(val type: ChannelType) : Intent
+        data class ChangeCreateChannelPrivate(val isPrivate: Boolean) : Intent
         data object SubmitCreateChannel : Intent
+        data class SelectProject(val projectId: Long) : Intent
+        data object OpenCreateProject : Intent
+        data object CloseCreateProject : Intent
+        data class ChangeCreateProjectName(val name: String) : Intent
+        data class ChangeCreateProjectDescription(val description: String) : Intent
+        data object SubmitCreateProject : Intent
         data object OpenAccountMenu : Intent
         data object ToggleAccountMenu : Intent
         data object CloseAccountMenu : Intent
@@ -45,6 +55,14 @@ interface MainStore : Store<Intent, State, Label> {
         data class UpdateTimeFormat(val timeFormat: TimeFormat) : Intent
         data class UpdateDateFormat(val dateFormat: DateFormat) : Intent
         data class UpdateMarketingEmail(val enabled: Boolean) : Intent
+        data object OpenAddWebhook : Intent
+        data object CloseAddWebhook : Intent
+        data class ChangeAddWebhookName(val name: String) : Intent
+        data class ChangeAddWebhookSecure(val isSecure: Boolean) : Intent
+        data object SubmitAddWebhook : Intent
+        data class DeleteWebhook(val webhookId: Long) : Intent
+        data class ReorderChannels(val fromIndex: Int, val toIndex: Int) : Intent
+        data class ReorderProjects(val fromIndex: Int, val toIndex: Int) : Intent
     }
 
     data class State(
@@ -53,9 +71,20 @@ interface MainStore : Store<Intent, State, Label> {
         val channels: List<Channel> = emptyList(),
         val selectedChannelId: Long? = null,
         val messages: List<ChatMessage> = emptyList(),
+        val threads: List<Thread> = emptyList(),
+        val webhooks: List<Webhook> = emptyList(),
+        val isLoadingWebhooks: Boolean = false,
+        val isAddWebhookOpen: Boolean = false,
+        val addWebhookName: String = "",
+        val addWebhookIsSecure: Boolean = false,
+        val isAddingWebhook: Boolean = false,
+        val projects: List<Project> = emptyList(),
+        val selectedProjectId: Long? = null,
         val isLoadingTeams: Boolean = false,
         val isLoadingChannels: Boolean = false,
         val isLoadingMessages: Boolean = false,
+        val isLoadingThreads: Boolean = false,
+        val isLoadingProjects: Boolean = false,
         val chatDraft: String = "",
         val isCreateTeamOpen: Boolean = false,
         val createTeamName: String = "",
@@ -65,9 +94,14 @@ interface MainStore : Store<Intent, State, Label> {
         val isCreatingTeam: Boolean = false,
         val isCreateChannelOpen: Boolean = false,
         val createChannelName: String = "",
-        val createChannelNotice: String = "",
+        val createChannelDescription: String = "",
         val createChannelType: ChannelType = ChannelType.Text,
+        val createChannelIsPrivate: Boolean = false,
         val isCreatingChannel: Boolean = false,
+        val isCreateProjectOpen: Boolean = false,
+        val createProjectName: String = "",
+        val createProjectDescription: String = "",
+        val isCreatingProject: Boolean = false,
         val error: String? = null,
         val accountId: Long? = null,
         val accountEmail: String? = null,
@@ -98,11 +132,20 @@ interface MainStore : Store<Intent, State, Label> {
         val selectedChannel: Channel?
             get() = channels.firstOrNull { it.id == selectedChannelId }
 
+        val selectedProject: Project?
+            get() = projects.firstOrNull { it.id == selectedProjectId }
+
         val canSubmitTeam: Boolean
             get() = createTeamName.isNotBlank() && !isCreatingTeam
 
         val canSubmitChannel: Boolean
             get() = selectedTeamId != null && createChannelName.isNotBlank() && !isCreatingChannel
+
+        val canSubmitProject: Boolean
+            get() = selectedTeamId != null && createProjectName.isNotBlank() && !isCreatingProject
+
+        val canSubmitWebhook: Boolean
+            get() = addWebhookName.isNotBlank() && !isAddingWebhook
     }
 
     sealed interface Label {

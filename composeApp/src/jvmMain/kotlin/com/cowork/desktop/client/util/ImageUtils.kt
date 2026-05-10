@@ -1,8 +1,7 @@
 package com.cowork.desktop.client.util
 
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.res.loadImageBitmap
-import java.io.ByteArrayInputStream
+import org.jetbrains.compose.resources.decodeToImageBitmap
 
 internal actual fun decodeImageBitmap(bytes: ByteArray): ImageBitmap? =
-    runCatching { loadImageBitmap(ByteArrayInputStream(bytes)) }.getOrNull()
+    runCatching { bytes.decodeToImageBitmap() }.getOrNull()

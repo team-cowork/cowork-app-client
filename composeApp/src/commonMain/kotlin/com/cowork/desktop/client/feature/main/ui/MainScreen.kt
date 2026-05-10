@@ -25,12 +25,14 @@ import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,7 +53,9 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Settings
@@ -92,7 +96,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -106,9 +112,13 @@ import com.cowork.desktop.client.domain.model.AppTheme
 import com.cowork.desktop.client.domain.model.Channel
 import com.cowork.desktop.client.domain.model.ChannelType
 import com.cowork.desktop.client.domain.model.DateFormat
+import com.cowork.desktop.client.domain.model.Project
+import com.cowork.desktop.client.domain.model.ProjectStatus
 import com.cowork.desktop.client.domain.model.TeamRole
 import com.cowork.desktop.client.domain.model.TeamSummary
+import com.cowork.desktop.client.domain.model.Thread
 import com.cowork.desktop.client.domain.model.TimeFormat
+import com.cowork.desktop.client.domain.model.Webhook
 import com.cowork.desktop.client.domain.model.UserStatus
 import com.cowork.desktop.client.feature.main.component.MainComponent
 import com.cowork.desktop.client.feature.main.store.MainStore
@@ -166,12 +176,16 @@ fun MainScreen(component: MainComponent) {
                     width = channelPaneWidth,
                     onChannelClick = component::onChannelClick,
                     onCreateChannelClick = component::onCreateChannelClick,
+                    onProjectClick = component::onProjectClick,
+                    onCreateProjectClick = component::onCreateProjectClick,
                     onAccountBarClick = component::onAccountMenuClick,
+                    onReorderChannels = component::onReorderChannels,
+                    onReorderProjects = component::onReorderProjects,
                 )
 
                 VerticalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))
 
-                WorkspacePane(state = state)
+                WorkspacePane(state = state, component = component)
             }
 
             // 드래그 핸들을 Row 바깥에서 오버레이 — 1dp 시각 라인과 겹치도록 배치해 갭 없음
@@ -240,9 +254,20 @@ fun MainScreen(component: MainComponent) {
                     state = state,
                     onDismiss = component::onCreateChannelDismiss,
                     onNameChange = component::onCreateChannelNameChange,
-                    onNoticeChange = component::onCreateChannelNoticeChange,
+                    onDescriptionChange = component::onCreateChannelDescriptionChange,
                     onTypeChange = component::onCreateChannelTypeChange,
+                    onPrivateChange = component::onCreateChannelPrivateChange,
                     onSubmit = component::onCreateChannelSubmit,
+                )
+            }
+
+            if (state.isCreateProjectOpen) {
+                CreateProjectDialog(
+                    state = state,
+                    onDismiss = component::onCreateProjectDismiss,
+                    onNameChange = component::onCreateProjectNameChange,
+                    onDescriptionChange = component::onCreateProjectDescriptionChange,
+                    onSubmit = component::onCreateProjectSubmit,
                 )
             }
 
@@ -404,7 +429,11 @@ private fun ChannelPane(
     width: Dp,
     onChannelClick: (Long) -> Unit,
     onCreateChannelClick: () -> Unit,
+    onProjectClick: (Long) -> Unit,
+    onCreateProjectClick: () -> Unit,
     onAccountBarClick: () -> Unit,
+    onReorderChannels: (Int, Int) -> Unit,
+    onReorderProjects: (Int, Int) -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -481,12 +510,55 @@ private fun ChannelPane(
                     CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
                 }
                 state.channels.isEmpty() -> EmptyPaneText("아직 채널이 없습니다.")
-                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(state.channels, key = { it.id }) { channel ->
-                        ChannelRow(
-                            channel = channel,
-                            isSelected = channel.id == state.selectedChannelId,
-                            onClick = { onChannelClick(channel.id) },
+                else -> DraggableItemList(
+                    items = state.channels,
+                    key = { it.id },
+                    onReorder = onReorderChannels,
+                ) { channel, isDragging ->
+                    ChannelRow(
+                        channel = channel,
+                        isSelected = channel.id == state.selectedChannelId && !isDragging,
+                        onClick = { onChannelClick(channel.id) },
+                    )
+                }
+            }
+
+            if (state.selectedTeamId != null) {
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "프로젝트",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    TextButton(onClick = onCreateProjectClick) {
+                        Text("+")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                when {
+                    state.isLoadingProjects -> CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp).padding(top = 4.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    state.projects.isEmpty() -> EmptyPaneText("아직 프로젝트가 없습니다.")
+                    else -> DraggableItemList(
+                        items = state.projects,
+                        key = { it.id },
+                        onReorder = onReorderProjects,
+                    ) { project, isDragging ->
+                        ProjectRow(
+                            project = project,
+                            isSelected = project.id == state.selectedProjectId && !isDragging,
+                            onClick = { onProjectClick(project.id) },
                         )
                     }
                 }
@@ -1193,83 +1265,508 @@ private fun ChannelRow(
 }
 
 @Composable
-private fun WorkspacePane(state: MainStore.State) {
+private fun ProjectRow(
+    project: Project,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.FolderOpen,
+            contentDescription = null,
+            modifier = Modifier.size(15.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = project.name,
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (project.status == ProjectStatus.Archived) {
+            Text(
+                text = "보관됨",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ThreadRow(thread: Thread) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.Article,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = if (thread.isArchived) MaterialTheme.colorScheme.onSurfaceVariant
+                   else MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = thread.name,
+            modifier = Modifier.weight(1f),
+            color = if (thread.isArchived) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (thread.isArchived) {
+            Text(
+                text = "보관됨",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun WebhookRow(webhook: Webhook, onDelete: () -> Unit) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Link,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = webhook.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (webhook.isSecure) {
+                    Text(
+                        text = "보안 토큰 사용",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                webhook.token?.let { token ->
+                    Text(
+                        text = token,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "삭제",
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddWebhookDialog(state: MainStore.State, component: MainComponent) {
+    Dialog(onDismissRequest = component::onAddWebhookDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 4.dp,
+            modifier = Modifier.widthIn(min = 360.dp, max = 480.dp),
+        ) {
+            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("웹훅 추가", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    value = state.addWebhookName,
+                    onValueChange = component::onAddWebhookNameChange,
+                    label = { Text("웹훅 이름") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column {
+                        Text("보안 토큰 사용", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = "활성화 시 서명 검증용 토큰이 발급됩니다",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = state.addWebhookIsSecure,
+                        onCheckedChange = component::onAddWebhookSecureChange,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                ) {
+                    TextButton(onClick = component::onAddWebhookDismiss) { Text("취소") }
+                    Button(
+                        onClick = component::onAddWebhookSubmit,
+                        enabled = state.canSubmitWebhook,
+                    ) {
+                        if (state.isAddingWebhook) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                        } else {
+                            Text("추가")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun <T> DraggableItemList(
+    items: List<T>,
+    key: (T) -> Any,
+    onReorder: (fromIndex: Int, toIndex: Int) -> Unit,
+    itemContent: @Composable (item: T, isDragging: Boolean) -> Unit,
+) {
+    var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
+    val itemHeightPx = remember { mutableStateOf(0f) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        items.forEachIndexed { index, item ->
+            val isDragging = draggingIndex == index
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (isDragging) Modifier.absoluteOffset(y = with(LocalDensity.current) { dragOffsetY.toDp() }) else Modifier)
+                    .pointerInput(key(item)) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                draggingIndex = index
+                                dragOffsetY = 0f
+                            },
+                            onDrag = { _, dragAmount ->
+                                dragOffsetY += dragAmount.y
+                                val itemH = itemHeightPx.value.takeIf { it > 0 } ?: 48f
+                                val targetIndex = (index + (dragOffsetY / itemH).toInt())
+                                    .coerceIn(0, items.lastIndex)
+                                if (targetIndex != index) {
+                                    onReorder(index, targetIndex)
+                                    dragOffsetY -= (targetIndex - index) * itemH
+                                    draggingIndex = targetIndex
+                                }
+                            },
+                            onDragEnd = { draggingIndex = null; dragOffsetY = 0f },
+                            onDragCancel = { draggingIndex = null; dragOffsetY = 0f },
+                        )
+                    }
+                    .then(if (isDragging) Modifier.background(
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                        MaterialTheme.shapes.small,
+                    ) else Modifier),
+            ) {
+                Layout(content = { itemContent(item, isDragging) }) { measurables, constraints ->
+                    val placeable = measurables.first().measure(constraints)
+                    itemHeightPx.value = placeable.height.toFloat()
+                    layout(placeable.width, placeable.height) { placeable.placeRelative(0, 0) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkspacePane(state: MainStore.State, component: MainComponent) {
+    val selectedChannel = state.selectedChannel
+    val selectedProject = state.selectedProject
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(32.dp),
     ) {
+        when {
+            selectedChannel != null -> ChannelWorkspace(state = state, channel = selectedChannel, component = component)
+            selectedProject != null -> ProjectWorkspace(project = selectedProject)
+            else -> EmptyWorkspace(state = state)
+        }
+    }
+}
+
+@Composable
+private fun EmptyWorkspace(state: MainStore.State) {
+    Text(
+        text = state.selectedTeam?.name ?: "팀을 선택하세요",
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onBackground,
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = "채널 또는 프로젝트를 선택하세요.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun ColumnScope.ChannelWorkspace(state: MainStore.State, channel: Channel, component: MainComponent) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(
+            imageVector = channel.type.icon(),
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
         Text(
-            text = state.selectedChannel?.name ?: state.selectedTeam?.name ?: "팀을 선택하세요",
+            text = channel.name,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
         )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = state.selectedChannel?.let { channel ->
-                "${channel.type.label()} 채널입니다. 채팅/음성/웹훅 작업 영역이 이 패널에 이어서 구현됩니다."
-            } ?: "채팅, 이슈, 음성채팅 작업 영역이 이 패널에 이어서 구현됩니다.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        state.selectedChannel?.notice?.takeIf { it.isNotBlank() }?.let { notice ->
-            Spacer(modifier = Modifier.height(24.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = MaterialTheme.shapes.medium,
-            ) {
-                Text(
-                    text = notice,
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
-
-        if (state.selectedChannel?.type == ChannelType.Text) {
-            Spacer(modifier = Modifier.height(32.dp))
-            Text(
-                text = "메시지",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
-            when {
-                state.isLoadingMessages -> CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp),
-                    strokeWidth = 2.dp,
-                )
-                state.messages.isEmpty() -> EmptyPaneText(
-                    "메시지 조회 API가 연결되면 최근 메시지가 표시됩니다.",
-                )
-                else -> LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(state.messages, key = { it.id }) { message ->
-                        MessageRow(message = message)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = "",
-                onValueChange = {},
-                modifier = Modifier.fillMaxWidth(),
-                enabled = false,
-                placeholder = { Text("Socket.io JWT 인증 연결 후 메시지 전송 활성화") },
-                singleLine = true,
+        if (channel.isPrivate) {
+            Icon(
+                imageVector = Icons.Rounded.Lock,
+                contentDescription = "비공개",
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
+
+    channel.description?.takeIf { it.isNotBlank() }?.let { description ->
+        Spacer(modifier = Modifier.height(12.dp))
+        Surface(
+            color = MaterialTheme.colorScheme.primaryContainer,
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            Text(
+                text = description,
+                modifier = Modifier.padding(12.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
+
+    when (channel.type) {
+        ChannelType.Text -> TextChannelContent(state = state)
+        ChannelType.Webhook -> WebhookChannelContent(state = state, component = component)
+        ChannelType.Voice -> ComingSoonContent(icon = Icons.AutoMirrored.Rounded.VolumeUp, message = "음성 채팅은 추후 지원될 예정입니다.")
+        ChannelType.MeetingNote -> ComingSoonContent(icon = Icons.AutoMirrored.Rounded.Article, message = "회의록 기능은 서버 구현 후 지원될 예정입니다.")
+        ChannelType.AccountShare -> ComingSoonContent(icon = Icons.Rounded.Person, message = "계정 공유 기능은 추후 지원될 예정입니다.")
+        ChannelType.FileShare -> ComingSoonContent(icon = Icons.AutoMirrored.Rounded.Article, message = "파일 공유 기능은 추후 지원될 예정입니다.")
+        ChannelType.Unknown -> ComingSoonContent(icon = Icons.AutoMirrored.Rounded.HelpOutline, message = "알 수 없는 채널 타입입니다.")
+    }
+}
+
+@Composable
+private fun ColumnScope.TextChannelContent(state: MainStore.State) {
+    Text(
+        text = "메시지",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onBackground,
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+
+    when {
+        state.isLoadingMessages -> CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+        state.messages.isEmpty() -> EmptyPaneText("메시지가 없습니다.")
+        else -> LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(state.messages, key = { it.id }) { message ->
+                MessageRow(message = message)
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+    OutlinedTextField(
+        value = "",
+        onValueChange = {},
+        modifier = Modifier.fillMaxWidth(),
+        enabled = false,
+        placeholder = { Text("Socket.io JWT 인증 연결 후 메시지 전송 활성화") },
+        singleLine = true,
+    )
+
+    Spacer(modifier = Modifier.height(24.dp))
+    Text(
+        text = "스레드",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onBackground,
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    when {
+        state.isLoadingThreads -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+        state.threads.isEmpty() -> EmptyPaneText("스레드가 없습니다.")
+        else -> LazyColumn(
+            modifier = Modifier.heightIn(max = 200.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            items(state.threads, key = { it.id }) { thread ->
+                ThreadRow(thread = thread)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.WebhookChannelContent(state: MainStore.State, component: MainComponent) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = "웹훅",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        TextButton(onClick = component::onAddWebhookClick) {
+            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("웹훅 추가")
+        }
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+
+    when {
+        state.isLoadingWebhooks -> CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+        state.webhooks.isEmpty() -> EmptyPaneText("등록된 웹훅이 없습니다. 웹훅을 추가하면 외부 서비스에서 메시지를 전송할 수 있습니다.")
+        else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            state.webhooks.forEach { webhook ->
+                WebhookRow(
+                    webhook = webhook,
+                    onDelete = { component.onDeleteWebhook(webhook.id) },
+                )
+            }
+        }
+    }
+
+    if (state.isAddWebhookOpen) {
+        AddWebhookDialog(state = state, component = component)
+    }
+}
+
+@Composable
+private fun ColumnScope.ComingSoonContent(icon: ImageVector, message: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth().weight(1f),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ProjectWorkspace(project: Project) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(
+            imageVector = Icons.Rounded.FolderOpen,
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = project.name,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Surface(
+            color = when (project.status) {
+                ProjectStatus.Active -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                ProjectStatus.Archived -> MaterialTheme.colorScheme.surfaceVariant
+                ProjectStatus.Unknown -> MaterialTheme.colorScheme.surfaceVariant
+            },
+            shape = MaterialTheme.shapes.small,
+        ) {
+            Text(
+                text = when (project.status) {
+                    ProjectStatus.Active -> "활성"
+                    ProjectStatus.Archived -> "보관됨"
+                    ProjectStatus.Unknown -> "알 수 없음"
+                },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = when (project.status) {
+                    ProjectStatus.Active -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+    }
+
+    project.description?.takeIf { it.isNotBlank() }?.let { description ->
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
+    Text(
+        text = "칸반 보드, 이슈 트래커 등 작업 영역이 이 패널에 이어서 구현됩니다.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
@@ -1738,8 +2235,9 @@ private fun CreateChannelDialog(
     state: MainStore.State,
     onDismiss: () -> Unit,
     onNameChange: (String) -> Unit,
-    onNoticeChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
     onTypeChange: (ChannelType) -> Unit,
+    onPrivateChange: (Boolean) -> Unit,
     onSubmit: () -> Unit,
 ) {
     CoworkDialog(onDismissRequest = onDismiss) {
@@ -1781,14 +2279,35 @@ private fun CreateChannelDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                DialogFieldLabel("공지 (선택)")
+                DialogFieldLabel("설명 (선택)")
                 Spacer(modifier = Modifier.height(6.dp))
                 DialogTextField(
-                    value = state.createChannelNotice,
-                    onValueChange = onNoticeChange,
-                    placeholder = "채널 상단에 표시될 공지 내용",
-                    minLines = 3,
+                    value = state.createChannelDescription,
+                    onValueChange = onDescriptionChange,
+                    placeholder = "채널에 대한 간단한 설명",
+                    minLines = 2,
                 )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column {
+                        DialogFieldLabel("비공개 채널")
+                        Text(
+                            text = "초대된 멤버만 접근할 수 있습니다",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = state.createChannelIsPrivate,
+                        onCheckedChange = onPrivateChange,
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -1796,6 +2315,56 @@ private fun CreateChannelDialog(
                     label = "채널 만들기",
                     enabled = state.canSubmitChannel,
                     isLoading = state.isCreatingChannel,
+                    onClick = onSubmit,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreateProjectDialog(
+    state: MainStore.State,
+    onDismiss: () -> Unit,
+    onNameChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+) {
+    CoworkDialog(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.width(440.dp)) {
+            CoworkDialogHeader(
+                title = "새 프로젝트 만들기",
+                subtitle = "프로젝트 이름과 설명을 입력하세요.",
+                onDismiss = onDismiss,
+            )
+
+            Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
+                DialogFieldLabel("프로젝트 이름")
+                Spacer(modifier = Modifier.height(6.dp))
+                DialogTextField(
+                    value = state.createProjectName,
+                    onValueChange = onNameChange,
+                    placeholder = "예: 코워크 앱 개발",
+                    singleLine = true,
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                DialogFieldLabel("설명 (선택)")
+                Spacer(modifier = Modifier.height(6.dp))
+                DialogTextField(
+                    value = state.createProjectDescription,
+                    onValueChange = onDescriptionChange,
+                    placeholder = "프로젝트에 대한 간단한 설명",
+                    minLines = 3,
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                DialogSubmitButton(
+                    label = "프로젝트 만들기",
+                    enabled = state.canSubmitProject,
+                    isLoading = state.isCreatingProject,
                     onClick = onSubmit,
                 )
             }
@@ -2031,6 +2600,8 @@ private fun ChannelType.icon(): ImageVector = when (this) {
     ChannelType.Voice -> Icons.AutoMirrored.Rounded.VolumeUp
     ChannelType.Webhook -> Icons.Rounded.Link
     ChannelType.MeetingNote -> Icons.AutoMirrored.Rounded.Article
+    ChannelType.AccountShare -> Icons.Rounded.Person
+    ChannelType.FileShare -> Icons.AutoMirrored.Rounded.Article
     ChannelType.Unknown -> Icons.AutoMirrored.Rounded.HelpOutline
 }
 
@@ -2039,5 +2610,7 @@ private fun ChannelType.label(): String = when (this) {
     ChannelType.Voice -> "음성"
     ChannelType.Webhook -> "웹훅"
     ChannelType.MeetingNote -> "회의록"
+    ChannelType.AccountShare -> "계정 공유"
+    ChannelType.FileShare -> "파일 공유"
     ChannelType.Unknown -> "알 수 없음"
 }

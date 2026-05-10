@@ -2,6 +2,7 @@ package com.cowork.desktop.client.data.repository
 
 import com.cowork.desktop.client.data.remote.ChannelApi
 import com.cowork.desktop.client.domain.model.Channel
+import com.cowork.desktop.client.domain.model.ChannelMember
 import com.cowork.desktop.client.domain.model.ChannelType
 
 class DefaultChannelRepository(
@@ -10,25 +11,39 @@ class DefaultChannelRepository(
 ) : ChannelRepository {
 
     override suspend fun getTeamChannels(teamId: Long): List<Channel> =
-        authorized { accessToken -> channelApi.getTeamChannels(accessToken, teamId) }
+        authorized { channelApi.getTeamChannels(it, teamId) }
+
+    override suspend fun getChannel(channelId: Long): Channel =
+        authorized { channelApi.getChannel(it, channelId) }
 
     override suspend fun createChannel(
         teamId: Long,
         type: ChannelType,
         name: String,
-        notice: String?,
-        projectId: Long?,
+        description: String?,
+        isPrivate: Boolean,
     ): Channel =
-        authorized { accessToken ->
-            channelApi.createChannel(
-                accessToken = accessToken,
-                teamId = teamId,
-                type = type,
-                name = name,
-                notice = notice,
-                projectId = projectId,
-            )
-        }
+        authorized { channelApi.createChannel(it, teamId, type, name, description, isPrivate) }
+
+    override suspend fun updateChannel(
+        channelId: Long,
+        name: String?,
+        description: String?,
+        isPrivate: Boolean?,
+    ): Channel =
+        authorized { channelApi.updateChannel(it, channelId, name, description, isPrivate) }
+
+    override suspend fun deleteChannel(channelId: Long) =
+        authorized { channelApi.deleteChannel(it, channelId) }
+
+    override suspend fun getMembers(channelId: Long): List<ChannelMember> =
+        authorized { channelApi.getMembers(it, channelId) }
+
+    override suspend fun addMember(channelId: Long, userId: Long): ChannelMember =
+        authorized { channelApi.addMember(it, channelId, userId) }
+
+    override suspend fun removeMember(channelId: Long, memberId: Long) =
+        authorized { channelApi.removeMember(it, channelId, memberId) }
 
     private suspend fun <T> authorized(block: suspend (String) -> T): T =
         authRepository.authorized(block)

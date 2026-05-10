@@ -50,29 +50,32 @@ class UserApi(
         val name: String? = null,
         val email: String? = null,
         val sex: String? = null,
-        val github: String? = null,
-        val accountDescription: String? = null,
-        val studentRole: String? = null,
-        val studentNumber: String? = null,
+        @SerialName("github_id") val githubId: String? = null,
+        @SerialName("account_description") val accountDescription: String? = null,
+        @SerialName("student_role") val studentRole: String? = null,
+        @SerialName("student_number") val studentNumber: String? = null,
         val major: String? = null,
         val specialty: String? = null,
         val status: String? = null,
         val nickname: String? = null,
         val roles: List<String> = emptyList(),
         val description: String? = null,
-        @SerialName("profileImageUrl")
-        val profileImageUrl: String? = null,
+        @SerialName("profile_image_url") val profileImageUrl: String? = null,
     )
 
     @Serializable
     data class PresignedUploadResponse(
-        val uploadUrl: String,
-        val objectKey: String,
+        @SerialName("upload_url") val uploadUrl: String,
+        @SerialName("object_key") val objectKey: String,
     )
 
     @Serializable
-    private data class PresignedUrlRequest(val contentType: String)
+    private data class PresignedUrlRequest(
+        @SerialName("content_type") val contentType: String,
+    )
 
     @Serializable
-    private data class ConfirmUploadRequest(val objectKey: String)
+    private data class ConfirmUploadRequest(
+        @SerialName("object_key") val objectKey: String,
+    )
 }
